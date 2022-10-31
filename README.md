@@ -7,7 +7,7 @@ This is the repo for our CS 197 final project.
 After cloning the directory, please run:
 
 ```
-conda env create --file requirements.txt
+conda create --name <env> --file requirements.txt
 ```
 
 If adding packages to the directory, please update the `requirements.txt`:
