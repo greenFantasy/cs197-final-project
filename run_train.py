@@ -14,7 +14,6 @@ from model import CLIP
 from simple_tokenizer import SimpleTokenizer
 
 from train import train_main, load_data, load_clip, preprocess_text
-from zero_shot import run_cxr_zero_shot, run_zero_shot
 
 def parse_args():
     parser = argparse.ArgumentParser()
