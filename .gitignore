@@ -1,3 +1,10 @@
+# Models (will figure out a good system for sharing these later)
+checkpoints/*
+data/*
+!data/README.md
+
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

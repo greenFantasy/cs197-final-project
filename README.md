@@ -16,7 +16,6 @@ conda list --explicit > requirements.txt
 ```
 from the repo root directory.
 
-
 ### Data and Model Training Setup with AWS - Aakash Mishra (aakamishra)
 
 - You can access the aws ami which is shared under the name complete-data-cs197
@@ -47,4 +46,6 @@ sync; echo 1 > /proc/sys/vm/drop_caches
 
 This will write RAM data to disk using the sync operation and free up CPU space that can help speed up training and avoid issues regarding memory during model checkpointing. 
 
+# Zero-shot Dataset Downloads
 
+All information to setup and download cheXpert and Padchest datasets located in `data/README.md`.
