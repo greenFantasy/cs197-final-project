@@ -63,16 +63,16 @@ def img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, resolution
                 failed_images.append((path, e))
     print(f"{len(failed_images)} / {len(cxr_paths)} images failed to be added to h5.", failed_images)
 
-def get_files(directory):
+def get_files(directory, file_extension='.jpg'):
     files = []
     for (dirpath, dirnames, filenames) in os.walk(directory):
         for file in filenames:
-            if file.endswith(".jpg"):
+            if file.endswith(file_extension):
                 files.append(os.path.join(dirpath, file))
     return files
 
-def get_cxr_path_csv(out_filepath, directory):
-    files = get_files(directory)
+def get_cxr_path_csv(out_filepath, directory, file_extension='.jpg'):
+    files = get_files(directory, file_extension=file_extension)
     file_dict = {"Path": files}
     df = pd.DataFrame(file_dict)
     df.to_csv(out_filepath, index=False)
