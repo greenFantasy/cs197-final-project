@@ -228,16 +228,13 @@ class CXRBERT(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         model_url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-        cxr_bert = AutoModel.from_pretrained(model_url, trust_remote_code=True)
-        # all_params = list(cxr_bert.parameters())
-        # params = all_params[:len(all_params)-6]
-        # self.resblocks = nn.Sequential(*(list(cxr_bert.children())[:-1]))
-        self.model = nn.Sequential(list(cxr_bert.children())[0])
-        self.width = 768
+        cxr_bert = AutoModel.from_pretrained(model_url, trust_remote_code=True, revision='main')
+        # self.model = list(cxr_bert.children())[0]
+        self.model = cxr_bert
+        self.width = 128
 
     def forward(self, x: torch.Tensor):
         output = self.model(x)
-        final = output.shape
         return output
 
 
@@ -317,7 +314,6 @@ class CLIP(nn.Module):
                 output_dim=embed_dim
             )
 
-        ## REPLACE
         # self.transformer = Transformer(
         #     width=transformer_width,
         #     layers=transformer_layers,
@@ -331,7 +327,8 @@ class CLIP(nn.Module):
         self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
         self.ln_final = LayerNorm(transformer_width)
 
-        self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
+        # self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
+        self.text_projection = nn.Parameter(torch.empty(self.transformer.width, embed_dim))
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.initialize_parameters()
@@ -381,20 +378,20 @@ class CLIP(nn.Module):
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
-        print(text.shape)
-        x = text
-        #  x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+        # x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
         # x = x + self.positional_embedding.type(self.dtype)
         # x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x).type(self.dtype)
+        # x = self.transformer(x)
+        # x = x.permute(1, 0, 2)  # LND -> NLD
+        # x = self.ln_final(x).type(self.dtype)
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+        # x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
 
+        x = text.input_ids
+        x = self.transformer.model.get_projected_text_embeddings(x, text.attention_mask) @ self.text_projection
         return x
 
     def forward(self, image, text):
