@@ -13,6 +13,7 @@ from torch.utils import data
 from torch import nn
 import torch.optim as optim
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
+from transformers import AutoTokenizer
 
 import sys
 sys.path.append('../..')
@@ -158,18 +159,25 @@ def preprocess_text(texts, model):
 #     if model.context_length is None: 
 #         model = model.module
         
-    _tokenizer = SimpleTokenizer()
-    sot_token = _tokenizer.encoder["<|startoftext|>"]
-    eot_token = _tokenizer.encoder["<|endoftext|>"]
-    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
-    result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
+    # _tokenizer = SimpleTokenizer()
+    # sot_token = _tokenizer.encoder["<|startoftext|>"]
+    # eot_token = _tokenizer.encoder["<|endoftext|>"]
+    # all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+    # result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
     
-    for i, tokens in enumerate(all_tokens):
-        if len(tokens) > model.context_length:
-            tokens = tokens[:model.context_length]
-            tokens[model.context_length - 1] = eot_token
-        result[i, :len(tokens)] = torch.tensor(tokens)
-    return result
+    # for i, tokens in enumerate(all_tokens):
+    #     if len(tokens) > model.context_length:
+    #         tokens = tokens[:model.context_length]
+    #         tokens[model.context_length - 1] = eot_token
+    #     result[i, :len(tokens)] = torch.tensor(tokens)
+    # return result
+
+    url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+    tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+    return tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
+                                               add_special_tokens=True,
+                                               padding='longest',
+                                               return_tensors='pt')
 
 def make(config, cxr_filepath, txt_filepath, model_path=None): 
     '''
