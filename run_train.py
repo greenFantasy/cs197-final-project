@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--context_length', type=int, default=77)
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
+    parser.add_argument('--use_chexzero', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -52,16 +53,16 @@ def model_pipeline(config, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length)
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
     model.to(device)
     print('Model on Device.')
 
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
     if config.optimizer == "adam": 
-        optimizer = optim.AdamW(model.parameters(), lr=config.lr)
+        optimizer = optim.AdamW(model.visual.parameters(), lr=config.lr)
     elif config.optimizer == "sgd": 
-        optimizer = optim.SGD(model.parameters(), lr=config.lr, momentum=config.momentum)
+        optimizer = optim.SGD(model.visual.parameters(), lr=config.lr, momentum=config.momentum)
     return model, data_loader, device, criterion, optimizer
 
 def train(model, loader, device, criterion, optimizer, config): 
@@ -137,6 +138,7 @@ def save(model, path):
     
 if __name__ == "__main__":
     args = parse_args()
+    print(args)
     model = model_pipeline(args)
     
 
