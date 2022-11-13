@@ -111,7 +111,7 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77):
+def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero=False):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -137,7 +137,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77):
         'vocab_size': 49408,
         'transformer_width': 512,
         'transformer_heads': 8,
-        'transformer_layers': 12
+        'transformer_layers': 12,
+        'use_chexzero': use_chexzero
     }
     
     # set device 
@@ -145,7 +146,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77):
     
     if pretrained: 
         # load clip pre-trained model
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False)
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_chexzero=use_chexzero)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -158,28 +159,29 @@ def load_clip(model_path=None, pretrained=False, context_length=77):
     
     
 def preprocess_text(texts, model):
-#     if model.context_length is None: 
-#         model = model.module
+    if model.use_chexzero:
+        if model.context_length is None: 
+            model = model.module
+            
+        _tokenizer = SimpleTokenizer()
+        sot_token = _tokenizer.encoder["<|startoftext|>"]
+        eot_token = _tokenizer.encoder["<|endoftext|>"]
+        all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+        result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
         
-    # _tokenizer = SimpleTokenizer()
-    # sot_token = _tokenizer.encoder["<|startoftext|>"]
-    # eot_token = _tokenizer.encoder["<|endoftext|>"]
-    # all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
-    # result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
-    
-    # for i, tokens in enumerate(all_tokens):
-    #     if len(tokens) > model.context_length:
-    #         tokens = tokens[:model.context_length]
-    #         tokens[model.context_length - 1] = eot_token
-    #     result[i, :len(tokens)] = torch.tensor(tokens)
-    # return result
-
-    url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-    tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
-    return tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
-                                               add_special_tokens=True,
-                                               padding='longest',
-                                               return_tensors='pt')
+        for i, tokens in enumerate(all_tokens):
+            if len(tokens) > model.context_length:
+                tokens = tokens[:model.context_length]
+                tokens[model.context_length - 1] = eot_token
+            result[i, :len(tokens)] = torch.tensor(tokens)
+        return result
+    else:
+        url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+        tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+        return tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
+                                                add_special_tokens=True,
+                                                padding='longest',
+                                                return_tensors='pt')
 
 def make(config, cxr_filepath, txt_filepath, model_path=None): 
     '''
