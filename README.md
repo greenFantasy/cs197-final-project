@@ -55,3 +55,7 @@ This will write RAM data to disk using the sync operation and free up CPU space 
 # Zero-shot Dataset Downloads
 
 All information to setup and download cheXpert and Padchest datasets located in `data/README.md`.
+
+# Pre-processing
+
+python run_preprocess.py --csv_out_path=./data/CheXpert/test_labels.csv --dataset_type='chexpert-test' --chest_x_ray_path='./data/CheXpert/'
