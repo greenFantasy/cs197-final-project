@@ -31,8 +31,8 @@ if __name__ == "__main__":
         cxr_paths = list(cxr_dir.rglob("*.jpg"))
         cxr_paths = list(filter(lambda x: "view1" in str(x), cxr_paths)) # filter only first frontal views 
         cxr_paths = sorted(cxr_paths) # sort to align with groundtruth
-        assert(len(cxr_paths) == 500)
-       
+        # assert(len(cxr_paths) == 500)
+               
         img_to_hdf5(cxr_paths, args.cxr_out_path)
 
     elif args.dataset_type == 'padchest-sample':

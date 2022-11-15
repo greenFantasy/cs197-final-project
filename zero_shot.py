@@ -114,7 +114,8 @@ def zeroshot_classifier(classnames, templates, model, context_length=77):
         # compute embedding through model for each class
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates] # format with class
-            texts = clip.tokenize(texts, context_length=context_length) # tokenize
+            # texts = clip.tokenize(texts, context_length=context_length) # tokenize
+            
             class_embeddings = model.encode_text(texts) # embed with text encoder
             
             # normalize class_embeddings
@@ -193,9 +194,13 @@ def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True
         
     Returns list, predictions from the given template. 
     """
+    print("Checkpoint1")
     cxr_phrase = [template]
+    print("Checkpoint2")
     zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length)
+    print("Checkpoint3")
     y_pred = predict(loader, model, zeroshot_weights, softmax_eval=softmax_eval)
+    print("Checkpoint4")
     return y_pred
 
 def process_alt_labels(alt_labels_dict, cxr_labels): 
