@@ -38,6 +38,12 @@ In order to run the model training process, please run the following -ETA 25 min
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
 ```
 
+In order to run the model training process with the original CheXzero model, please run the following.
+
+```
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_chexzero
+```
+
 In order to deal with memory issues with data downloading please use:
 
 ```
