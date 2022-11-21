@@ -59,10 +59,11 @@ def make(config):
 
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
+    params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
     if config.optimizer == "adam": 
-        optimizer = optim.AdamW(model.visual.parameters(), lr=config.lr)
+        optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
-        optimizer = optim.SGD(model.visual.parameters(), lr=config.lr, momentum=config.momentum)
+        optimizer = optim.SGD(params_list, lr=config.lr, momentum=config.momentum)
     return model, data_loader, device, criterion, optimizer
 
 def train(model, loader, device, criterion, optimizer, config): 
