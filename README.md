@@ -38,12 +38,6 @@ In order to run the model training process, please run the following -ETA 25 min
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
 ```
 
-In order to run the model training process with the original CheXzero model, please run the following.
-
-```
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_chexzero_text
-```
-
 In order to deal with memory issues with data downloading please use:
 
 ```
@@ -51,6 +45,34 @@ sync; echo 1 > /proc/sys/vm/drop_caches
 ```
 
 This will write RAM data to disk using the sync operation and free up CPU space that can help speed up training and avoid issues regarding memory during model checkpointing. 
+
+# Experiments
+
+For our experiments we are testing out different combinations of the CheXzero vision and text stacks with our experimental vision and text stacks. By default, when you run the training command from above you will be training the updated model with our new vision and text components. Our experiments also involve either training or locking the two stacks of our model. By default, the training command leaves both parts of the model unlocked. However, you can include different parameter flags in your training command to make the adjustments that you would prefer. As a reminder, the basic training command is the following.
+
+```
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
+```
+
+In order to run the model training process with the original CheXzero text transformer, include the following at the end of the command.
+
+```
+--use_chexzero_text
+```
+
+In order to train the model with a locked text stack, include the following at the end of the training command.
+
+```
+--lock_text
+```
+
+In order to train the model with a locked vision stack, include the following at the end of the training command.
+
+```
+--lock_vision
+```
+
+A combination of the above parameter flags may be used to achieve the appropriate experimental training settings.
 
 # Zero-shot Dataset Downloads
 
