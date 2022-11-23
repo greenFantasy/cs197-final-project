@@ -19,10 +19,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
     parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', help="Directory to load radiology report impressions text from.")
+    parser.add_argument('--model_path', type=str, default='checkpoints/pt-imp/checkpoint_31500.pt')
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--epochs', type=int, default=4)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--save_interval', type=int, default=100)
+    parser.add_argument('--save_interval', type=int, default=300)
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--save_dir', type=str, default="checkpoints/", help="Directory to save the trained model.")
     parser.add_argument('--seed', type=int, default=1234)
@@ -53,16 +54,17 @@ def model_pipeline(config, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
+    model = load_clip(model_path=config.model_path, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
     model.to(device)
     print('Model on Device.')
 
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
+    params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
     if config.optimizer == "adam": 
-        optimizer = optim.AdamW(model.visual.parameters(), lr=config.lr)
+        optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
-        optimizer = optim.SGD(model.visual.parameters(), lr=config.lr, momentum=config.momentum)
+        optimizer = optim.SGD(params_list, lr=config.lr, momentum=config.momentum)
     return model, data_loader, device, criterion, optimizer
 
 def train(model, loader, device, criterion, optimizer, config): 
@@ -108,7 +110,7 @@ def train(model, loader, device, criterion, optimizer, config):
 def train_batch(images, texts, model, device, criterion, optimizer):
     images, texts = images.to(device), texts.to(device)
     
-    # Forward pass ➡
+    # Forward pass 
     logits_per_image, logits_per_text = model(images, texts)
     
     # Create labels
