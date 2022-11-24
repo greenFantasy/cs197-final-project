@@ -459,6 +459,7 @@ def update_state_dict(state_dict: dict, model: nn.Module):
 
 
 def build_model(state_dict: dict, use_cxrbert=False):
+
     vit = "visual.proj" in state_dict
 
     if vit:
