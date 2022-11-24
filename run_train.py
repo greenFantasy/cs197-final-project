@@ -32,6 +32,8 @@ def parse_args():
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
     parser.add_argument('--use_chexzero_text', action='store_true')
+    parser.add_argument('--lock_text', action='store_true')
+    parser.add_argument('--lock_vision', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -57,9 +59,20 @@ def make(config):
     model.to(device)
     print('Model on Device.')
 
+    # establish the parameters to train based on what is locked
+    params_list = []
+    params_key = 'params'
+    if not config.lock_text:
+        params_list.append({params_key: model.transformer.parameters()})
+        params_list.append({params_key: model.text_projection})
+        if config.use_chexzero_text:
+            params_list.append({params_key: model.token_embedding.parameters()})
+            params_list.append({params_key: model.positional_embedding})
+    if not config.lock_vision:
+        params_list.append({params_key: model.visual.parameters()})
+        
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
-    params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
     if config.optimizer == "adam": 
         optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
