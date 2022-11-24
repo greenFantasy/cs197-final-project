@@ -19,7 +19,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
     parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', help="Directory to load radiology report impressions text from.")
+<<<<<<< HEAD
     parser.add_argument('--model_path', type=str, default='checkpoints/pt-imp/checkpoint_31500.pt')
+=======
+    parser.add_argument('--model_path', type=str, default=None)
+>>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -32,7 +36,9 @@ def parse_args():
     parser.add_argument('--context_length', type=int, default=77)
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
-    parser.add_argument('--use_chexzero', action='store_true')
+    parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--lock_text', action='store_true')
+    parser.add_argument('--lock_vision', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -54,13 +60,35 @@ def model_pipeline(config, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
+<<<<<<< HEAD
     model = load_clip(model_path=config.model_path, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
+=======
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
+>>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     model.to(device)
     print('Model on Device.')
 
+    # establish the parameters to train based on what is locked
+    params_list = []
+    params_key = 'params'
+    params_list.append(model.text_projection)
+    if not config.lock_text:
+        params_list.append(model.transformer.parameters())
+        if not config.use_cxrbert:
+            params_list.append(model.token_embedding.parameters())
+            params_list.append(model.positional_embedding)
+    if not config.lock_vision:
+        params_list.append(model.visual.parameters())
+    params_list = [{params_key: param} for param in params_list]
+        
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
+<<<<<<< HEAD
     params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
+=======
+    #params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
+    params_list = model.parameters()
+>>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     if config.optimizer == "adam": 
         optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
