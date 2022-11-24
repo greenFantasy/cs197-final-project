@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--save_interval', type=int, default=300)
+    parser.add_argument('--save_interval', type=int, default=500)
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--save_dir', type=str, default="checkpoints/", help="Directory to save the trained model.")
     parser.add_argument('--seed', type=int, default=1234)
@@ -75,8 +75,6 @@ def make(config):
         
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
-    #params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
-    params_list = model.parameters()
     if config.optimizer == "adam": 
         optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
