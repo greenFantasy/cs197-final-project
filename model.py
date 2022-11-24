@@ -450,7 +450,6 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     updated_state_dict = model.state_dict().copy()
     # filter out entries from state_dict that aren't in the model's state dict 
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
-    print(items_to_update)
     # filter out the text projection update if we aren't using the CheXzero text stack
     if not model.use_chexzero_text:
         del items_to_update['text_projection']
