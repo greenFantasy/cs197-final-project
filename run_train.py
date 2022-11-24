@@ -31,7 +31,9 @@ def parse_args():
     parser.add_argument('--context_length', type=int, default=77)
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
-    parser.add_argument('--use_chexzero', action='store_true')
+    parser.add_argument('--use_chexzero_text', action='store_true')
+    parser.add_argument('--lock_text', action='store_true')
+    parser.add_argument('--lock_vision', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -53,16 +55,29 @@ def model_pipeline(config, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_chexzero_text=config.use_chexzero_text)
     model.to(device)
     print('Model on Device.')
 
+    # establish the parameters to train based on what is locked
+    params_list = []
+    params_key = 'params'
+    params_list.append(model.text_projection)
+    if not config.lock_text:
+        params_list.append(model.transformer.parameters())
+        if config.use_chexzero_text:
+            params_list.append(model.token_embedding.parameters())
+            params_list.append(model.positional_embedding)
+    if not config.lock_vision:
+        params_list.append(model.visual.parameters())
+    params_list = [{params_key: param} for param in params_list]
+        
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
     if config.optimizer == "adam": 
-        optimizer = optim.AdamW(model.visual.parameters(), lr=config.lr)
+        optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
-        optimizer = optim.SGD(model.visual.parameters(), lr=config.lr, momentum=config.momentum)
+        optimizer = optim.SGD(params_list, lr=config.lr, momentum=config.momentum)
     return model, data_loader, device, criterion, optimizer
 
 def train(model, loader, device, criterion, optimizer, config): 
