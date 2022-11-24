@@ -111,7 +111,7 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero=False):
+def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero_text=False):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -138,7 +138,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero
         'transformer_width': 512,
         'transformer_heads': 8,
         'transformer_layers': 12,
-        'use_chexzero': use_chexzero
+        'use_chexzero_text': use_chexzero_text
     }
     
     # set device 
@@ -146,7 +146,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero
     
     if pretrained: 
         # load clip pre-trained model
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_chexzero=use_chexzero)
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_chexzero_text=use_chexzero_text)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -159,7 +159,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_chexzero
     
     
 def preprocess_text(texts, model):
-    if model.use_chexzero:
+    if model.use_chexzero_text:
         if model.context_length is None: 
             model = model.module
             

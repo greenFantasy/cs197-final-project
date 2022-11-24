@@ -288,12 +288,12 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_chexzero: bool
+                 use_chexzero_text: bool
                  ):
         super().__init__()
 
         self.context_length = context_length
-        self.use_chexzero = use_chexzero
+        self.use_chexzero_text = use_chexzero_text
 
         if isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
@@ -315,7 +315,7 @@ class CLIP(nn.Module):
                 output_dim=embed_dim
             )
 
-        if self.use_chexzero:
+        if self.use_chexzero_text:
             self.transformer = Transformer(
                 width=transformer_width,
                 layers=transformer_layers,
@@ -353,7 +353,7 @@ class CLIP(nn.Module):
                     if name.endswith("bn3.weight"):
                         nn.init.zeros_(param)
 
-        if self.use_chexzero:
+        if self.use_chexzero_text:
             proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
             attn_std = self.transformer.width ** -0.5
             fc_std = (2 * self.transformer.width) ** -0.5
@@ -382,7 +382,7 @@ class CLIP(nn.Module):
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
-        if self.use_chexzero:
+        if self.use_chexzero_text:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
             x = x + self.positional_embedding.type(self.dtype)
@@ -441,7 +441,7 @@ def convert_weights(model: nn.Module):
     model.apply(_convert_weights_to_fp16)
 
 
-def build_model(state_dict: dict, use_chexzero=False):
+def build_model(state_dict: dict, use_chexzero_text=False):
     vit = "visual.proj" in state_dict
 
     if vit:
@@ -469,14 +469,14 @@ def build_model(state_dict: dict, use_chexzero=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_chexzero
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_chexzero_text
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:
         if key in state_dict:
             del state_dict[key]
 
-    if model.use_chexzero:
+    if model.use_chexzero_text:
         convert_weights(model)
         model.load_state_dict(state_dict)
 
