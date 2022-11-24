@@ -62,14 +62,15 @@ def make(config):
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
+    params_list.append(model.text_projection)
     if not config.lock_text:
-        params_list.append({params_key: model.transformer.parameters()})
-        params_list.append({params_key: model.text_projection})
+        params_list.append(model.transformer.parameters())
         if config.use_chexzero_text:
-            params_list.append({params_key: model.token_embedding.parameters()})
-            params_list.append({params_key: model.positional_embedding})
+            params_list.append(model.token_embedding.parameters())
+            params_list.append(model.positional_embedding)
     if not config.lock_vision:
-        params_list.append({params_key: model.visual.parameters()})
+        params_list.append(model.visual.parameters())
+    params_list = [{params_key: param} for param in params_list]
         
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
