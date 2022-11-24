@@ -288,12 +288,12 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_chexzero_text: bool
+                 use_cxrbert: bool
                  ):
         super().__init__()
 
         self.context_length = context_length
-        self.use_chexzero_text = use_chexzero_text
+        self.use_cxrbert = use_cxrbert
 
         if isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
@@ -315,7 +315,7 @@ class CLIP(nn.Module):
                 output_dim=embed_dim
             )
 
-        if self.use_chexzero_text:
+        if not self.use_cxrbert:
             self.transformer = Transformer(
                 width=transformer_width,
                 layers=transformer_layers,
@@ -353,7 +353,7 @@ class CLIP(nn.Module):
                     if name.endswith("bn3.weight"):
                         nn.init.zeros_(param)
 
-        if self.use_chexzero_text:
+        if not self.use_cxrbert:
             proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
             attn_std = self.transformer.width ** -0.5
             fc_std = (2 * self.transformer.width) ** -0.5
@@ -382,7 +382,7 @@ class CLIP(nn.Module):
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
-        if self.use_chexzero_text:
+        if not self.use_cxrbert:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
             x = x + self.positional_embedding.type(self.dtype)
@@ -451,14 +451,14 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     # filter out entries from state_dict that aren't in the model's state dict 
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
     # filter out the text projection update if we aren't using the CheXzero text stack
-    if not model.use_chexzero_text:
+    if model.use_cxrbert:
         del items_to_update['text_projection']
     # perform the update for the new state dict
     updated_state_dict.update(items_to_update)
     return updated_state_dict
 
 
-def build_model(state_dict: dict, use_chexzero_text=False):
+def build_model(state_dict: dict, use_cxrbert=False):
     vit = "visual.proj" in state_dict
 
     if vit:
@@ -486,14 +486,14 @@ def build_model(state_dict: dict, use_chexzero_text=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_chexzero_text
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:
         if key in state_dict:
             del state_dict[key]
 
-    if model.use_chexzero_text:
+    if not model.use_cxrbert:
         convert_weights(model)
         
     updated_state_dict = update_state_dict(state_dict, model)
