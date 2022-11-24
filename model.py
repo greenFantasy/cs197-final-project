@@ -439,6 +439,24 @@ def convert_weights(model: nn.Module):
                     attr.data = attr.data.half()
 
     model.apply(_convert_weights_to_fp16)
+    
+
+def update_state_dict(state_dict: dict, model: nn.Module):
+    """
+    Creates an updated state dict object by starting with the model's state dict
+    and updating based on the values in the state_dict argument
+    """
+    # create new state dict object from current model
+    updated_state_dict = model.state_dict().copy()
+    # filter out entries from state_dict that aren't in the model's state dict 
+    items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
+    print(items_to_update)
+    # filter out the text projection update if we aren't using the CheXzero text stack
+    if not model.use_chexzero_text:
+        del items_to_update['text_projection']
+    # perform the update for the new state dict
+    updated_state_dict.update(items_to_update)
+    return updated_state_dict
 
 
 def build_model(state_dict: dict, use_chexzero_text=False):
@@ -478,6 +496,8 @@ def build_model(state_dict: dict, use_chexzero_text=False):
 
     if model.use_chexzero_text:
         convert_weights(model)
-        model.load_state_dict(state_dict)
+        
+    updated_state_dict = update_state_dict(state_dict, model)
+    model.load_state_dict(updated_state_dict)
 
     return model.eval()
