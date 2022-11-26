@@ -235,7 +235,11 @@ class CXRBERT(nn.Module):
     def forward(self, x: torch.Tensor):
         output = self.model(x)
         return output
-
+    
+# TODO: write class for VITMAE encoder (might want to separate out projection head from encoder for locking)
+class ViTMAE():
+    def __init__(self):
+        pass
 
 class VisualTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
@@ -288,14 +292,22 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_cxrbert: bool
+                 # extensions
+                 use_cxrbert: bool,
+                 use_vitmae: bool
                  ):
         super().__init__()
 
         self.context_length = context_length
         self.use_cxrbert = use_cxrbert
+        self.use_vitmae = use_vitmae
 
-        if isinstance(vision_layers, (tuple, list)):
+        # TODO: init vitmae
+        if self.use_vitmae:
+            self.visual = ViTMAE(
+                
+            )
+        elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
                 layers=vision_layers,
@@ -339,6 +351,8 @@ class CLIP(nn.Module):
     def initialize_parameters(self):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
         nn.init.normal_(self.positional_embedding, std=0.01)
+        
+        # TODO: potential initialization for vision projection head
 
         if isinstance(self.visual, ModifiedResNet):
             if self.visual.attnpool is not None:
@@ -379,6 +393,7 @@ class CLIP(nn.Module):
         return self.visual.conv1.weight.dtype
 
     def encode_image(self, image):
+        # TODO: ensure this syntax still works with ViTMAE
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
@@ -457,8 +472,9 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     updated_state_dict.update(items_to_update)
     return updated_state_dict
 
-
-def build_model(state_dict: dict, use_cxrbert=False):
+# TODO: add in logic to load VITMAE from existing weights and also update state dictionary after loading
+# might need to update above function as well
+def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False):
 
     vit = "visual.proj" in state_dict
 
@@ -487,7 +503,7 @@ def build_model(state_dict: dict, use_cxrbert=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert, use_vitmae
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:

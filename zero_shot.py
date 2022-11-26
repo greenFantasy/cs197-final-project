@@ -81,7 +81,9 @@ def load_clip(model_path, pretrained=False, context_length=77):
             'vocab_size': 49408,
             'transformer_width': 512,
             'transformer_heads': 8,
-            'transformer_layers': 12
+            'transformer_layers': 12,
+            'use_cxrbert': False,
+            'use_vitmae': False
         }
 
         model = CLIP(**params)

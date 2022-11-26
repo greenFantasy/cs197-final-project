@@ -18,7 +18,8 @@ from train import train_main, load_data, load_clip, preprocess_text
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
-    parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', help="Directory to load radiology report impressions text from.")
+    parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', 
+                        help="Directory to load radiology report impressions text from.")
     parser.add_argument('--model_path', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=10)
@@ -33,6 +34,7 @@ def parse_args():
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
     parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--use_vitmae', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
     args = parser.parse_args()
@@ -55,8 +57,10 @@ def model_pipeline(config, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
-    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
+    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, 
+                                    pretrained=pretrained, column="impression")
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, 
+                      use_cxrbert=config.use_cxrbert, use_vitmae=config.use_vitmae)
     model.to(device)
     print('Model on Device.')
 
@@ -69,10 +73,17 @@ def make(config):
         if not config.use_cxrbert:
             params_list.append(model.token_embedding.parameters())
             params_list.append(model.positional_embedding)
-    if not config.lock_vision:
-        params_list.append(model.visual.parameters())
+    if config.use_vitmae:
+        if not config.lock_vision:
+            # TODO: vitmae if vision is unlocked
+            params_list.append(model.vitmae_encoder)
+        # TODO: projection head always included
+        params_list.append(model.vision_projection)
+    else:
+        if not config.lock_vision:
+            params_list.append(model.visual.parameters())
     params_list = [{params_key: param} for param in params_list]
-        
+
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
     if config.optimizer == "adam": 
