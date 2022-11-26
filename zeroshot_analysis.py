@@ -24,7 +24,7 @@ def model_zeroshot_confidence_interval(config, model_paths):
     # PRESET variables
     cxr_pair_template = ("{}", "no {}")
     cache_dir = None
-    use_cxrbert = True
+    use_cxrbert = config.use_cxrbert
     
     predictions, y_pred_avg = zero_shot.ensemble_models(
         model_paths=model_paths, 

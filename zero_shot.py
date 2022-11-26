@@ -116,7 +116,7 @@ def zeroshot_classifier(classnames, templates, model, context_length=77, use_cxr
         # compute embedding through model for each class
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates] # format with class
-            # texts = clip.tokenize(texts, context_length=context_length) # tokenize
+            
             if use_cxrbert:
                 url = "microsoft/BiomedVLP-CXR-BERT-specialized"
                 tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
@@ -124,6 +124,8 @@ def zeroshot_classifier(classnames, templates, model, context_length=77, use_cxr
                                                         add_special_tokens=True,
                                                         padding='longest',
                                                         return_tensors='pt')
+            else:
+                texts = clip.tokenize(texts, context_length=context_length) # tokenize
             class_embeddings = model.encode_text(texts) # embed with text encoder
             
             # normalize class_embeddings
@@ -202,13 +204,9 @@ def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True
         
     Returns list, predictions from the given template. 
     """
-    print("Checkpoint1")
     cxr_phrase = [template]
-    print("Checkpoint2")
     zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length, use_cxrbert=use_cxrbert)
-    print("Checkpoint3")
     y_pred = predict(loader, model, zeroshot_weights, softmax_eval=softmax_eval)
-    print("Checkpoint4")
     return y_pred
 
 def process_alt_labels(alt_labels_dict, cxr_labels): 
@@ -418,7 +416,7 @@ def ensemble_models(
     cxr_pair_template: Tuple[str], 
     cache_dir: str = None, 
     save_name: str = None,
-    use_cxrbert= False
+    use_cxrbert=False
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
     """
     Given a list of `model_paths`, ensemble model and return
