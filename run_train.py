@@ -19,15 +19,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
     parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', help="Directory to load radiology report impressions text from.")
-<<<<<<< HEAD
-    parser.add_argument('--model_path', type=str, default='checkpoints/pt-imp/checkpoint_31500.pt')
-=======
     parser.add_argument('--model_path', type=str, default=None)
->>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--save_interval', type=int, default=300)
+    parser.add_argument('--save_interval', type=int, default=500)
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--save_dir', type=str, default="checkpoints/", help="Directory to save the trained model.")
     parser.add_argument('--seed', type=int, default=1234)
@@ -60,11 +56,7 @@ def model_pipeline(config, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-<<<<<<< HEAD
-    model = load_clip(model_path=config.model_path, pretrained=pretrained, context_length=config.context_length, use_chexzero=config.use_chexzero)
-=======
     model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
->>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     model.to(device)
     print('Model on Device.')
 
@@ -83,12 +75,6 @@ def make(config):
         
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
-<<<<<<< HEAD
-    params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
-=======
-    #params_list = [{"params": model.visual.parameters()}, {"params": model.text_projection}]
-    params_list = model.parameters()
->>>>>>> 927cb5b1a5e7c1957f20426b2b829a61b2995fcf
     if config.optimizer == "adam": 
         optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
