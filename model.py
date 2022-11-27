@@ -31,6 +31,12 @@ import torch.nn.functional as F
 from torch import nn
 from transformers import AutoModel
 
+# TODO: rename masked autoencoders folder so that this import works
+# I don't think there's another clean/correct option
+# it should happen on its own commit though because there will be many changes
+# since every file in the folder will appear in the changelog
+from masked_autoencoders.models_mae import MaskedAutoencoderViT
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -235,11 +241,62 @@ class CXRBERT(nn.Module):
     def forward(self, x: torch.Tensor):
         output = self.model(x)
         return output
-    
-# TODO: write class for VITMAE encoder (might want to separate out projection head from encoder for locking)
-class ViTMAE():
-    def __init__(self, vitmae_path: string) -> None:
-        super().__init__()
+
+# TODO: commit to one value for norm_pix_loss
+ViTMAE_ARGS = {
+    patch_size: 16, 
+    embed_dim: 768, 
+    depth: 12, 
+    num_heads: 12,
+    decoder_embed_dim: 512, 
+    decoder_depth: 8, 
+    decoder_num_heads: 16,
+    mlp_ratio: 4, 
+    norm_layer: partial(nn.LayerNorm, eps=1e-6), 
+    norm_pix_loss: False
+}
+
+# CJ: Implemented by inheriting from MAE class and then overriding forward function
+# Note that the parameter handling is done indirectly in the CLIP class since calling self.visual.attribute within the
+# CLIP class will access the ViTMAE attributes
+class ViTMAE(MaskedAutoencoderViT):
+    # constant for the number of final encoder blocks that are unlocked i.e. passed to optimizer
+    NUM_FINAL_ENCODER_BLOCKS = 2
+
+    def __init__(self, vitmae_path: string, embed_dim: int) -> None:
+        # Incredibly hacky but I don't know if we have a better solution without adding an insane amount of unnecessary
+        # extra arguments (unnecessary because we won't realistically change any of them)
+        super().__init__(**ViTMAE_ARGS)
+        # the second embed_dim is an argument passed down from the CLIP class
+        self.projection_head = nn.Linear(ViTMAE_ARGS.embed_dim, embed_dim)
+
+    # ViTMAE's implementation of forward_encoder without any masking or shuffling
+    def no_mask_encoder(x):
+        # embed patches
+        x = self.patch_embed(x)
+
+        # add pos embed w/o cls token
+        x = x + self.pos_embed[:, 1:, :]
+
+        # append cls token
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+
+        # apply Transformer blocks
+        for blk in self.blocks:
+            x = blk(x)
+        
+        # TODO: this norm layer is v interesting; we should figure out whether we want to include it in 
+        # the projection head parameters and/or the final encoder blocks parameters
+        x = self.norm(x)
+
+        return x
+
+    def forward(x):
+        encoding = self.no_mask_encoder(x)
+        cls_token = encoding[:, :1, :]
+        return self.projection_head(cls_token)
 
 
 class VisualTransformer(nn.Module):
@@ -308,7 +365,7 @@ class CLIP(nn.Module):
         if self.use_vitmae:
             if not vitmae_path:
                 raise ValueError("No path provided for ViTMAE")
-            self.visual = ViTMAE(vitmae_path)
+            self.visual = ViTMAE(vitmae_path, embed_dim)
         elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
@@ -390,6 +447,19 @@ class CLIP(nn.Module):
         mask.triu_(1)  # zero out the lower diagonal
         return mask
 
+    # CJ: ViTMAE specific properties
+    @property
+    def vision_projection(self):
+        if not self.use_vitmae:
+            raise KeyError("This model does not use ViTMAE")
+        return self.visual.projection_head
+
+    @property
+    def final_encoder_blocks(self):
+        if not self.use_vitmae:
+            raise KeyError("This model does not use ViTMAE")
+        return self.visual.blocks[-ViTMAE.NUM_FINAL_ENCODER_BLOCKS:]
+
     @property
     def dtype(self):
         return self.visual.conv1.weight.dtype
@@ -470,6 +540,7 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     # filter out the text projection update if we aren't using the CheXzero text stack
     if model.use_cxrbert:
         del items_to_update['text_projection']
+    # TODO: think this is fine; just flagging this so Raj can see the change
     # CJ: filter out entries from state_dict that are part of the vision tower because we want to keep ViTMAE weights
     if model.use_vitmae:
         items_to_update = {k: v for k, v in items_to_update.items() if k[:6] != "visual"}
