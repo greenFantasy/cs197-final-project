@@ -94,9 +94,9 @@ def available_models() -> List[str]:
     """Returns the names of available CLIP models"""
     return list(_MODELS.keys())
 
-
+# CJ: added args use_vitmae, vitmae_path
 def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu", jit=True, 
-         use_cxrbert=False, use_vitmae=False):
+         use_cxrbert=False, use_vitmae=False, vitmae_path=""):
     """Load a CLIP model
 
     Parameters
@@ -137,7 +137,8 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
         state_dict = torch.load(model_path, map_location="cpu")
 
     if not jit:
-        model = build_model(state_dict or model.state_dict(), use_cxrbert=use_cxrbert, use_vitmae=use_vitmae).to(device)
+        model = build_model(state_dict or model.state_dict(), use_cxrbert=use_cxrbert, use_vitmae=use_vitmae,
+                            vitmae_path=vitmae_path).to(device)
         if str(device) == "cpu":
             model.float()
         return model, _transform(model.visual.input_resolution)

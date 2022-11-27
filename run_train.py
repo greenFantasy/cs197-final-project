@@ -15,6 +15,7 @@ from simple_tokenizer import SimpleTokenizer
 
 from train import train_main, load_data, load_clip, preprocess_text
 
+# CJ: added arg vitmae_path (made it an absolute path to avoid issues when it gets passed down to other files)
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
@@ -37,6 +38,7 @@ def parse_args():
     parser.add_argument('--use_vitmae', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
+    parser.add_argument('--vitmae_path', type=str, default="", action='store', help="Absolute path to the ViTMAE model checkpoint")
     args = parser.parse_args()
     return args
 
@@ -55,12 +57,13 @@ def model_pipeline(config, verbose=0):
         print(model)
     return model
 
+# CJ: added args from parser into load_clip call
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, 
                                     pretrained=pretrained, column="impression")
     model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, 
-                      use_cxrbert=config.use_cxrbert, use_vitmae=config.use_vitmae)
+                      use_cxrbert=config.use_cxrbert, use_vitmae=config.use_vitmae, vitmae_path=config.vitmae_path)
     model.to(device)
     print('Model on Device.')
 

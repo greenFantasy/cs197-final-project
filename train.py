@@ -111,7 +111,8 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=False, use_vitmae=False):
+# CJ: added arguments use_vitmae, vitmae_path to pass down
+def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=False, use_vitmae=False, vitmae_path=""):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -139,7 +140,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
         'transformer_heads': 8,
         'transformer_layers': 12,
         'use_cxrbert': use_cxrbert,
-        'use_vitmae': use_vitmae
+        'use_vitmae': use_vitmae,
+        'vitmae_path': vitmae_path
     }
     
     # set device 
@@ -147,7 +149,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
     
     if pretrained: 
         # load clip pre-trained model
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_vitmae=use_vitmae)
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_vitmae=use_vitmae,
+                                      vitmae_path=vitmae_path)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -184,6 +187,8 @@ def preprocess_text(texts, model):
                                                 padding='longest',
                                                 return_tensors='pt')
 
+# CJ: this function appears to be completely unused but added the arguments in the call to load_clip anyway
+# note that I didn't actually add any arguments because I think they should be part of the config
 def make(config, cxr_filepath, txt_filepath, model_path=None): 
     '''
     FUNCTION: make
@@ -197,7 +202,8 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
         * model_path - string, filepath to previously trained model
     '''
     data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=config.batch_size, pretrained=config.pretrained, column=config.column)
-    model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length)
+    model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length,
+                      use_vitmae=config.use_vitmae, vitmae_path=config.vitmae_path)
     model.to(device)
     print('Model on Device.')
 
@@ -207,8 +213,8 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
     optimizer = optim.AdamW(model.parameters(), lr=config.lr)
     return model, data_loader, device, criterion, optimizer
 
-
-def train_main(cxr_filepath, txt_filepath, hyperparams, output_path, model_path=None, pretrained=False): 
+# CJ: added args use_vitmae, vitmae_path; this function is also unused
+def train_main(cxr_filepath, txt_filepath, hyperparams, output_path, model_path=None, pretrained=False, use_vitmae=False, vitmae_path=""): 
     '''
     args: 
         * cxr_filpath- str filepath to cxr images
@@ -231,7 +237,7 @@ def train_main(cxr_filepath, txt_filepath, hyperparams, output_path, model_path=
     
     # load input cxr + report data
     data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=batch_size, pretrained=pretrained)
-    model = load_clip(model_path=model_path, pretrained=pretrained)
+    model = load_clip(model_path=model_path, pretrained=pretrained, use_vitmae=use_vitmae, vitmae_path=vitmae_path)
     
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
     train_clip(model, data_loader, device, criterion, optimizer, epochs, output_path)

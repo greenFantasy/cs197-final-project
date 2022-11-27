@@ -63,7 +63,8 @@ class CXRTestDataset(data.Dataset):
     
         return sample
 
-def load_clip(model_path, pretrained=False, context_length=77): 
+# CJ: added arguments use_vitmae, vitmae_path to pass down; see TODO below
+def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False, vitmae_path=""): 
     """
     FUNCTION: load_clip
     ---------------------------------
@@ -82,13 +83,15 @@ def load_clip(model_path, pretrained=False, context_length=77):
             'transformer_width': 512,
             'transformer_heads': 8,
             'transformer_layers': 12,
+            # TODO: figure out why use_cxrbert is always set to false i.e. why isn't it an argument
             'use_cxrbert': False,
-            'use_vitmae': False
+            'use_vitmae': use_vitmae,
+            'vitmae_path': vitmae_path
         }
 
         model = CLIP(**params)
     else: 
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False) 
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_vitmae=use_vitmae, vitmae_path=vitmae_path) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 
@@ -352,11 +355,14 @@ def make_true_labels(
     y_true = full_labels.to_numpy()
     return y_true
 
+# CJ: added args use_vitmae, vitmae_path
 def make(
     model_path: str, 
     cxr_filepath: str, 
     pretrained: bool = True, 
     context_length: bool = 77, 
+    use_vitmae: bool = False, 
+    vitmae_path: str = ""
 ):
     """
     FUNCTION: make
@@ -378,7 +384,9 @@ def make(
     model = load_clip(
         model_path=model_path, 
         pretrained=pretrained, 
-        context_length=context_length
+        context_length=context_length, 
+        use_vitmae=use_vitmae, 
+        vitmae_path=vitmae_path
     )
 
     # load data
@@ -402,6 +410,7 @@ def make(
     
     return model, loader
 
+# CJ: didn't modify this function because it does ensembling; check Aakash's PR to see if this does need to be modified
 ## Run the model on the data set using ensembled models
 def ensemble_models(
     model_paths: List[str], 
@@ -454,7 +463,9 @@ def ensemble_models(
     
     return predictions, y_pred_avg
 
-def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_label_path, alt_labels_dict: dict = None, softmax_eval = True, context_length=77, pretrained: bool = False, use_bootstrap=True, cutlabels=True): 
+# CJ: added args use_vitmae, vitmae_path
+def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_label_path, alt_labels_dict: dict = None, softmax_eval = True, context_length=77, 
+                  pretrained: bool = False, use_bootstrap=True, cutlabels=True, use_vitmae=False, vitmae_path=""): 
     """
     FUNCTION: run_zero_shot
     --------------------------------------
@@ -489,7 +500,9 @@ def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_lab
         model_path=model_path, 
         cxr_filepath=cxr_filepath, 
         pretrained=pretrained,
-        context_length=context_length
+        context_length=context_length,
+        use_vitmae=use_vitmae, 
+        vitmae_path=vitmae_path
     )
 
     y_true = make_true_labels(
@@ -503,7 +516,8 @@ def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_lab
                              alt_labels_dict=alt_labels_dict, softmax_eval=softmax_eval, context_length=context_length, use_bootstrap=use_bootstrap)
     return results, y_pred
 
-def run_cxr_zero_shot(model_path, context_length=77, pretrained=False): 
+# CJ: added args use_vitmae, vitmae_path
+def run_cxr_zero_shot(model_path, context_length=77, pretrained=False, use_vitmae=False, vitmae_path=""): 
     """
     FUNCTION: run_cxr_zero_shot
     --------------------------------------
@@ -533,11 +547,14 @@ def run_cxr_zero_shot(model_path, context_length=77, pretrained=False):
     # templates list of positive and negative template pairs
     cxr_templates = [("{}", "no {}")]
     
-    cxr_results = run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=final_label_path, softmax_eval=True, context_length=context_length, pretrained=pretrained, use_bootstrap=False, cutlabels=True)
+    cxr_results = run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=final_label_path,
+                                softmax_eval=True, context_length=context_length, pretrained=pretrained, use_bootstrap=False, 
+                                cutlabels=True, use_vitmae=use_vitmae, vitmae_path=vitmae_path)
     
     return cxr_labels, cxr_results[0]
 
-def validation_zero_shot(model_path, context_length=77, pretrained=False): 
+# CJ: added args use_vitmae, vitmae_path
+def validation_zero_shot(model_path, context_length=77, pretrained=False, use_vitmae=False, vitmae_path=""): 
     """
     FUNCTION: validation_zero_shot
     --------------------------------------
@@ -564,15 +581,11 @@ def validation_zero_shot(model_path, context_length=77, pretrained=False):
     
     # run zero shot experiment
     sex_labels_path = '../../data/val_sex_labels.csv'
-    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True, cutlabels=False)
+    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, 
+                            softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True,
+                            cutlabels=False, use_vitmae=use_vitmae, vitmae_path=vitmae_path)
    
-    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True, cutlabels=False)
+    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, 
+                            softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True, 
+                            cutlabels=False, use_vitmae=use_vitmae, vitmae_path=vitmae_path)
     pass
-
-
-    
-    
-    
-    
-    
- 

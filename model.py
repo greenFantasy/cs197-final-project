@@ -238,8 +238,9 @@ class CXRBERT(nn.Module):
     
 # TODO: write class for VITMAE encoder (might want to separate out projection head from encoder for locking)
 class ViTMAE():
-    def __init__(self):
-        pass
+    def __init__(self, vitmae_path: string) -> None:
+        super().__init__()
+
 
 class VisualTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
@@ -294,7 +295,8 @@ class CLIP(nn.Module):
                  transformer_layers: int,
                  # extensions
                  use_cxrbert: bool,
-                 use_vitmae: bool
+                 use_vitmae: bool,
+                 vitmae_path: string = ""
                  ):
         super().__init__()
 
@@ -302,11 +304,11 @@ class CLIP(nn.Module):
         self.use_cxrbert = use_cxrbert
         self.use_vitmae = use_vitmae
 
-        # TODO: init vitmae
+        # CJ: very simple init for now that just loads the model from the checkpoint filepath
         if self.use_vitmae:
-            self.visual = ViTMAE(
-                
-            )
+            if not vitmae_path:
+                raise ValueError("No path provided for ViTMAE")
+            self.visual = ViTMAE(vitmae_path)
         elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
@@ -468,13 +470,16 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     # filter out the text projection update if we aren't using the CheXzero text stack
     if model.use_cxrbert:
         del items_to_update['text_projection']
+    # CJ: filter out entries from state_dict that are part of the vision tower because we want to keep ViTMAE weights
+    if model.use_vitmae:
+        items_to_update = {k: v for k, v in items_to_update.items() if k[:6] != "visual"}
     # perform the update for the new state dict
     updated_state_dict.update(items_to_update)
     return updated_state_dict
 
-# TODO: add in logic to load VITMAE from existing weights and also update state dictionary after loading
-# might need to update above function as well
-def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False):
+# CJ: simply pass the path argument to CLIP class; update_state_dict function has been edited
+# to leave vision tower as is if use_vitmae is set to true
+def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False, vitmae_path=""):
 
     vit = "visual.proj" in state_dict
 
@@ -503,7 +508,7 @@ def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert, use_vitmae
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert, use_vitmae, vitmae_path
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:
@@ -512,6 +517,8 @@ def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False):
 
     if not model.use_cxrbert:
         convert_weights(model)
+
+    # TODO: figure out if a similar conversion is needed for ViTMAE weights
         
     updated_state_dict = update_state_dict(state_dict, model)
     model.load_state_dict(updated_state_dict)
