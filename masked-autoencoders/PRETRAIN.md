@@ -55,3 +55,13 @@ python main_pretrain.py
 ```
 
 And we are training a masked autoencoder!
+
+### Multi-GPU Training
+
+We do a lot of our training on multiple GPUs on a single node (e.g. AWS p3.8xlarge instances). If you have multiple GPUs on your machine, you can use the `multigpu_pretrain.py` training script we developed. You can just run:
+
+```
+torchrun multigpu_pretrain.py --world_size=[# of gpus on node]
+```
+
+and you are now training using all the GPUs! You can confirm with the single GPU case that this runs a lot faster.
