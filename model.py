@@ -267,6 +267,20 @@ class ViTMAE(MaskedAutoencoderViT):
         # Incredibly hacky but I don't know if we have a better solution without adding an insane amount of unnecessary
         # extra arguments (unnecessary because we won't realistically change any of them)
         super().__init__(**ViTMAE_ARGS)
+        # load model
+        self.load_state_dict(torch.load(vitmae_path))
+
+        # TODO: decide whether to call self.eval() (equivalent to model.eval() in this context)
+        # eval only changes dropout and batchnorms; it doesn't affect the gradients at all, and it looks like we have
+        # neither (dropout or batchnorms) so doesn't seem necessary
+        # self.eval()
+
+        # freeze weights
+        # TODO: if we decide that the norm layer should be part of either the projection head or the final encoder
+        # blocks, then we should keep the code as is; otherwise we should add self.norm to the first list
+        for param in [self.patch_embed, self.cls_token] + self.blocks[:-ViTMAE.NUM_FINAL_ENCODER_BLOCKS]:
+            param.requires_grad = False
+        
         # the second embed_dim is an argument passed down from the CLIP class
         self.projection_head = nn.Linear(ViTMAE_ARGS.embed_dim, embed_dim)
 
@@ -411,9 +425,15 @@ class CLIP(nn.Module):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
         nn.init.normal_(self.positional_embedding, std=0.01)
         
-        # TODO: potential initialization for vision projection head
+        # TODO: ensure that this initialization is actually working; just a bit uncertain about the syntax
+        # particularly because of how I defined the properties in the CLIP class
+        # CJ: weight initialization for vision projection head based on MAE codebase's weight initialization for linear layers
+        if self.use_vitmae:
+            # xavier_uniform following official JAX ViT:
+            nn.init.xavier_uniform_(self.vision_projection.weight)
+            nn.init.constant_(self.vision_projection.bias, 0)
 
-        if isinstance(self.visual, ModifiedResNet):
+        elif isinstance(self.visual, ModifiedResNet):
             if self.visual.attnpool is not None:
                 std = self.visual.attnpool.c_proj.in_features ** -0.5
                 nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
@@ -460,12 +480,14 @@ class CLIP(nn.Module):
             raise KeyError("This model does not use ViTMAE")
         return self.visual.blocks[-ViTMAE.NUM_FINAL_ENCODER_BLOCKS:]
 
+    # added an if to handle ViTMAE because it doesn't have a conv1
     @property
     def dtype(self):
-        return self.visual.conv1.weight.dtype
+        return self.visual.patch_embed.proj.weight.dtype if self.use_vitmae else self.visual.conv1.weight.dtype
 
     def encode_image(self, image):
         # TODO: ensure this syntax still works with ViTMAE
+        # CJ: I think it still works; the most suspect thing is probably the dtype call
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
@@ -590,6 +612,8 @@ def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False, vitmae_pa
         convert_weights(model)
 
     # TODO: figure out if a similar conversion is needed for ViTMAE weights
+    # CJ: I think this may be a worthwhile speedup; the existing codebase uses AMP (automatic mixed precision)
+    # which should help as well
         
     updated_state_dict = update_state_dict(state_dict, model)
     model.load_state_dict(updated_state_dict)

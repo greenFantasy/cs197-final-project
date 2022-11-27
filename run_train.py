@@ -76,12 +76,14 @@ def make(config):
         if not config.use_cxrbert:
             params_list.append(model.token_embedding.parameters())
             params_list.append(model.positional_embedding)
+    # CJ: always include the projection head but only include attention blocks if we're unlocking the vision tower
     if config.use_vitmae:
-        if not config.lock_vision:
-            # TODO: vitmae if vision is unlocked
-            params_list.append(model.vitmae_encoder)
-        # TODO: projection head always included
         params_list.append(model.vision_projection)
+        if config.lock_vision:
+            for block in model.final_encoder_blocks:
+                block.requires_grad = False
+        else:
+            params_list.append(model.final_encoder_blocks)
     else:
         if not config.lock_vision:
             params_list.append(model.visual.parameters())
