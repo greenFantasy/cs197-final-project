@@ -133,11 +133,19 @@ def train(model, loader, device, criterion, optimizer, config):
                 running_loss = 0.0
             
             if (batch_ct % config.save_interval) == 0: 
-                model_path = os.path.join(model_save_dir, "checkpoint_{batch_ct}.pt".format(
-                    batch_ct=str(batch_ct), 
-                ))
+                name = "checkpoint"
+                if config.use_vitmae:
+                    name = config.vitmae_path.split("/")[-1].split('.')[0]
+                model_path = os.path.join(model_save_dir, f"{name}_{batch_ct}.pt")
                 print("Saved checkpoint to: ", model_path)
                 save(model, model_path)
+        
+        name = "checkpoint"
+        if config.use_vitmae:
+            name = config.vitmae_path.split("/")[-1].split('.')[0]
+        model_path = os.path.join(model_save_dir, f"{name}_epoch_{epoch}.pt")
+        print("Saved checkpoint to: ", model_path)
+        save(model, model_path)
                 
 def train_batch(images, texts, model, device, criterion, optimizer):
     images, texts = images.to(device), texts.to(device)
