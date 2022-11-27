@@ -295,7 +295,7 @@ class ViTMAE(MaskedAutoencoderViT):
 
     def forward(x):
         encoding = self.no_mask_encoder(x)
-        cls_token = encoding[:, :1, :]
+        cls_token = encoding[:, 0, :]
         return self.projection_head(cls_token)
 
 
