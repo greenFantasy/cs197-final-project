@@ -36,7 +36,10 @@ from transformers import AutoModel
 # I don't think there's another clean/correct option
 # it should happen on its own commit though because there will be many changes
 # since every file in the folder will appear in the changelog
-from masked_autoencoders.models_mae import MaskedAutoencoderViT
+import sys
+import os
+sys.path.insert(0, "./masked-autoencoders")
+from models_mae import MaskedAutoencoderViT
 
 
 class Bottleneck(nn.Module):
@@ -264,12 +267,12 @@ class ViTMAE(MaskedAutoencoderViT):
     # constant for the number of final encoder blocks that are unlocked i.e. passed to optimizer
     NUM_FINAL_ENCODER_BLOCKS = 2
 
-    def __init__(self, vitmae_path: string, embed_dim: int) -> None:
+    def __init__(self, vitmae_path: str, embed_dim: int, input_resolution: int) -> None:
         # Incredibly hacky but I don't know if we have a better solution without adding an insane amount of unnecessary
         # extra arguments (unnecessary because we won't realistically change any of them)
         super().__init__(**ViTMAE_ARGS)
         # load model
-        self.load_state_dict(torch.load(vitmae_path))
+        self.load_state_dict(torch.load(vitmae_path)['model'])
 
         # TODO: decide whether to call self.eval() (equivalent to model.eval() in this context)
         # eval only changes dropout and batchnorms; it doesn't affect the gradients at all, and it looks like we have
@@ -279,14 +282,16 @@ class ViTMAE(MaskedAutoencoderViT):
         # freeze weights
         # TODO: if we decide that the norm layer should be part of either the projection head or the final encoder
         # blocks, then we should keep the code as is; otherwise we should add self.norm to the first list
-        for param in [self.patch_embed, self.cls_token] + self.blocks[:-ViTMAE.NUM_FINAL_ENCODER_BLOCKS]:
+        for param in [self.patch_embed, self.cls_token] + list(self.blocks[:-ViTMAE.NUM_FINAL_ENCODER_BLOCKS]):
             param.requires_grad = False
         
+        self.input_resolution = input_resolution
+        
         # the second embed_dim is an argument passed down from the CLIP class
-        self.projection_head = nn.Linear(ViTMAE_ARGS.embed_dim, embed_dim)
+        self.projection_head = nn.Linear(ViTMAE_ARGS["embed_dim"], embed_dim)
 
     # ViTMAE's implementation of forward_encoder without any masking or shuffling
-    def no_mask_encoder(x):
+    def no_mask_encoder(self, x):
         # embed patches
         x = self.patch_embed(x)
 
@@ -308,7 +313,7 @@ class ViTMAE(MaskedAutoencoderViT):
 
         return x
 
-    def forward(x):
+    def forward(self, x):
         encoding = self.no_mask_encoder(x)
         cls_token = encoding[:, 0, :]
         return self.projection_head(cls_token)
@@ -368,7 +373,7 @@ class CLIP(nn.Module):
                  # extensions
                  use_cxrbert: bool,
                  use_vitmae: bool,
-                 vitmae_path: string = ""
+                 vitmae_path: str = ""
                  ):
         super().__init__()
 
@@ -380,7 +385,7 @@ class CLIP(nn.Module):
         if self.use_vitmae:
             if not vitmae_path:
                 raise ValueError("No path provided for ViTMAE")
-            self.visual = ViTMAE(vitmae_path, embed_dim)
+            self.visual = ViTMAE(vitmae_path, embed_dim, image_resolution)
         elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
@@ -609,7 +614,7 @@ def build_model(state_dict: dict, use_cxrbert=False, use_vitmae=False, vitmae_pa
         if key in state_dict:
             del state_dict[key]
 
-    if not model.use_cxrbert:
+    if not model.use_cxrbert and not model.use_vitmae:
         convert_weights(model)
 
     # TODO: figure out if a similar conversion is needed for ViTMAE weights
