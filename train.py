@@ -83,11 +83,13 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     if pretrained: 
         input_resolution = 224
         transform = Compose([
-            Normalize((101.48761, 101.48761, 101.48761), (83.43944, 83.43944, 83.43944)),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # Normalize((101.48761, 101.48761, 101.48761), (83.43944, 83.43944, 83.43944)),
             Resize(input_resolution, interpolation=InterpolationMode.BICUBIC),
         ])
         print('Interpolation Mode: ', InterpolationMode.BICUBIC)
         print("Finished image transforms for pretrained model.")
+        print(f"Transforms: {transform}")
     else: 
         input_resolution = 320
         transform = Compose([
