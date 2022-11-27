@@ -74,11 +74,13 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
+    curr_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
+    default_output_dir = f'./output_dir_{curr_time}'
     parser.add_argument('--data_path', default='../../CheXzero/cxr_data/files/', type=str,
                         help='dataset path')
-    parser.add_argument('--output_dir', default='./output_dir',
+    parser.add_argument('--output_dir', default=default_output_dir,
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./output_dir',
+    parser.add_argument('--log_dir', default=default_output_dir,
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
