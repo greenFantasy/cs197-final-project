@@ -80,12 +80,12 @@ def make(config):
             params_list.append(model.positional_embedding)
     # CJ: always include the projection head but only include attention blocks if we're unlocking the vision tower
     if config.use_vitmae:
-        params_list.append(model.vision_projection)
+        params_list.append(model.vision_projection.parameters())
         if config.lock_vision:
             for block in model.final_encoder_blocks:
                 block.requires_grad = False
         else:
-            params_list.append(model.final_encoder_blocks)
+            params_list.append(model.final_encoder_blocks.parameters())
     else:
         if not config.lock_vision:
             params_list.append(model.visual.parameters())
