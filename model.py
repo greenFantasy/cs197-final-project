@@ -23,6 +23,7 @@ SOFTWARE.
 
 """
 from collections import OrderedDict
+from functools import partial
 from typing import Tuple, Union
 
 import numpy as np
@@ -244,16 +245,16 @@ class CXRBERT(nn.Module):
 
 # TODO: commit to one value for norm_pix_loss
 ViTMAE_ARGS = {
-    patch_size: 16, 
-    embed_dim: 768, 
-    depth: 12, 
-    num_heads: 12,
-    decoder_embed_dim: 512, 
-    decoder_depth: 8, 
-    decoder_num_heads: 16,
-    mlp_ratio: 4, 
-    norm_layer: partial(nn.LayerNorm, eps=1e-6), 
-    norm_pix_loss: False
+    "patch_size": 16, 
+    "embed_dim": 768, 
+    "depth": 12, 
+    "num_heads": 12,
+    "decoder_embed_dim": 512, 
+    "decoder_depth": 8, 
+    "decoder_num_heads": 16,
+    "mlp_ratio": 4, 
+    "norm_layer": partial(nn.LayerNorm, eps=1e-6), 
+    "norm_pix_loss": False
 }
 
 # CJ: Implemented by inheriting from MAE class and then overriding forward function
