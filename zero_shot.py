@@ -14,6 +14,8 @@ from torch.utils import data
 from tqdm.notebook import tqdm
 import torch.nn as nn
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
+from transformers import AutoTokenizer
+
 
 import sklearn
 from sklearn.metrics import confusion_matrix, accuracy_score, auc, roc_auc_score, roc_curve, classification_report
@@ -64,7 +66,7 @@ class CXRTestDataset(data.Dataset):
         return sample
 
 # CJ: added argument use_vitmae to pass down; see TODO below
-def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False): 
+def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False, use_cxrbert=False): 
     """
     FUNCTION: load_clip
     ---------------------------------
@@ -90,7 +92,7 @@ def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False)
 
         model = CLIP(**params)
     else: 
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_vitmae=use_vitmae) 
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_vitmae=use_vitmae) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 
@@ -98,7 +100,7 @@ def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False)
         raise
     return model
 
-def zeroshot_classifier(classnames, templates, model, context_length=77):
+def zeroshot_classifier(classnames, templates, model, context_length=77, use_cxrbert=False):
     """
     FUNCTION: zeroshot_classifier
     -------------------------------------
@@ -118,8 +120,16 @@ def zeroshot_classifier(classnames, templates, model, context_length=77):
         # compute embedding through model for each class
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates] # format with class
-            # texts = clip.tokenize(texts, context_length=context_length) # tokenize
             
+            if use_cxrbert:
+                url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+                tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+                texts = tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
+                                                        add_special_tokens=True,
+                                                        padding='longest',
+                                                        return_tensors='pt')
+            else:
+                texts = clip.tokenize(texts, context_length=context_length) # tokenize
             class_embeddings = model.encode_text(texts) # embed with text encoder
             
             # normalize class_embeddings
@@ -181,7 +191,7 @@ def predict(loader, model, zeroshot_weights, softmax_eval=True, verbose=0):
     y_pred = np.array(y_pred)
     return np.array(y_pred)
 
-def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True, context_length=77): 
+def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True, context_length=77, use_cxrbert=False): 
     """
     FUNCTION: run_single_prediction
     --------------------------------------
@@ -198,13 +208,9 @@ def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True
         
     Returns list, predictions from the given template. 
     """
-    print("Checkpoint1")
     cxr_phrase = [template]
-    print("Checkpoint2")
-    zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length)
-    print("Checkpoint3")
+    zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length, use_cxrbert=use_cxrbert)
     y_pred = predict(loader, model, zeroshot_weights, softmax_eval=softmax_eval)
-    print("Checkpoint4")
     return y_pred
 
 def process_alt_labels(alt_labels_dict, cxr_labels): 
@@ -251,7 +257,7 @@ def process_alt_labels(alt_labels_dict, cxr_labels):
     
     return alt_label_list, alt_label_idx_map 
 
-def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, context_length: int = 77): 
+def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, context_length: int = 77, use_cxrbert=False): 
     """
     Run softmax evaluation to obtain a single prediction from the model.
     """
@@ -261,9 +267,9 @@ def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, con
 
     # get pos and neg predictions, (num_samples, num_classes)
     pos_pred = run_single_prediction(eval_labels, pos, model, loader, 
-                                     softmax_eval=True, context_length=context_length) 
+                                     softmax_eval=True, context_length=context_length, use_cxrbert=use_cxrbert) 
     neg_pred = run_single_prediction(eval_labels, neg, model, loader, 
-                                     softmax_eval=True, context_length=context_length) 
+                                     softmax_eval=True, context_length=context_length, use_cxrbert=use_cxrbert) 
 
     # compute probabilities with softmax
     sum_pred = np.exp(pos_pred) + np.exp(neg_pred)
@@ -360,6 +366,7 @@ def make(
     cxr_filepath: str, 
     pretrained: bool = True, 
     context_length: bool = 77, 
+    use_cxrbert=False,
     use_vitmae: bool = False, 
     vitmae_path: str = ""
 ):
@@ -384,6 +391,7 @@ def make(
         model_path=model_path, 
         pretrained=pretrained, 
         context_length=context_length, 
+        use_cxrbert=use_cxrbert,
         use_vitmae=use_vitmae, 
         vitmae_path=vitmae_path
     )
@@ -418,6 +426,7 @@ def ensemble_models(
     cxr_pair_template: Tuple[str], 
     cache_dir: str = None, 
     save_name: str = None,
+    use_cxrbert=False
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
     """
     Given a list of `model_paths`, ensemble model and return
@@ -436,6 +445,7 @@ def ensemble_models(
         model, loader = make(
             model_path=path, 
             cxr_filepath=cxr_filepath, 
+            use_cxrbert=use_cxrbert
         ) 
         
         # path to the cached prediction
@@ -451,7 +461,7 @@ def ensemble_models(
             y_pred = np.load(cache_path)
         else: # cached prediction not found, compute preds
             print("Inferring model {}".format(path))
-            y_pred = run_softmax_eval(model, loader, cxr_labels, cxr_pair_template)
+            y_pred = run_softmax_eval(model, loader, cxr_labels, cxr_pair_template, use_cxrbert=use_cxrbert)
             if cache_dir is not None: 
                 Path(cache_dir).mkdir(exist_ok=True, parents=True)
                 np.save(file=cache_path, arr=y_pred)
@@ -464,7 +474,7 @@ def ensemble_models(
 
 # CJ: added args use_vitmae, vitmae_path
 def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_label_path, alt_labels_dict: dict = None, softmax_eval = True, context_length=77, 
-                  pretrained: bool = False, use_bootstrap=True, cutlabels=True, use_vitmae=False, vitmae_path=""): 
+                  pretrained: bool = False, use_bootstrap=True, cutlabels=True, use_cxrbert=False, use_vitmae=False, vitmae_path=""): 
     """
     FUNCTION: run_zero_shot
     --------------------------------------
@@ -500,6 +510,7 @@ def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_lab
         cxr_filepath=cxr_filepath, 
         pretrained=pretrained,
         context_length=context_length,
+        use_cxrbert=use_cxrbert,
         use_vitmae=use_vitmae, 
         vitmae_path=vitmae_path
     )
