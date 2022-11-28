@@ -393,7 +393,6 @@ def make(
         context_length=context_length, 
         use_cxrbert=use_cxrbert,
         use_vitmae=use_vitmae, 
-        vitmae_path=vitmae_path
     )
 
     # load data
@@ -426,7 +425,8 @@ def ensemble_models(
     cxr_pair_template: Tuple[str], 
     cache_dir: str = None, 
     save_name: str = None,
-    use_cxrbert=False
+    use_cxrbert=False,
+    use_vitmae=False
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
     """
     Given a list of `model_paths`, ensemble model and return
@@ -445,7 +445,8 @@ def ensemble_models(
         model, loader = make(
             model_path=path, 
             cxr_filepath=cxr_filepath, 
-            use_cxrbert=use_cxrbert
+            use_cxrbert=use_cxrbert,
+            use_vitmae=use_vitmae
         ) 
         
         # path to the cached prediction
