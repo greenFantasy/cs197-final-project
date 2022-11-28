@@ -48,16 +48,16 @@ This will write RAM data to disk using the sync operation and free up CPU space 
 
 # Experiments
 
-For our experiments we are testing out different combinations of the CheXzero vision and text stacks with our experimental vision and text stacks. By default, when you run the training command from above you will be training the updated model with our new vision and text components. Our experiments also involve either training or locking the two stacks of our model. By default, the training command leaves both parts of the model unlocked. However, you can include different parameter flags in your training command to make the adjustments that you would prefer. As a reminder, the basic training command is the following.
+For our experiments we are testing out different combinations of the CheXzero vision and text stacks with our experimental vision and text stacks. By default, when you run the training command from above you will be training the CheXzero model. Our experiments also involve either training or locking the two stacks of our model. By default, the training command leaves both parts of the model unlocked. However, you can include different parameter flags in your training command to make the adjustments that you would prefer. As a reminder, the basic training command is the following.
 
 ```
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
 ```
 
-In order to run the model training process with the original CheXzero text transformer, include the following at the end of the command.
+In order to run the model training process with the CXR-BERT model for the text stack, include the following at the end of the command.
 
 ```
---use_chexzero_text
+--use_cxrbert
 ```
 
 In order to train the model with a locked text stack, include the following at the end of the training command.
@@ -72,7 +72,16 @@ In order to train the model with a locked vision stack, include the following at
 --lock_vision
 ```
 
-A combination of the above parameter flags may be used to achieve the appropriate experimental training settings.
+A combination of the above parameter flags may be used to achieve the appropriate experimental training settings. We now list out the full commands for the various experiment options (as denoted by our two character notation).
+
+```
+# uu
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
+# uU
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert
+# uL
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert --lock_text
+```
 
 # Zero-shot Dataset Downloads
 
