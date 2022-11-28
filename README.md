@@ -32,11 +32,19 @@ In order to run pre-processing again, one will have to run the following command
 python run_preprocessing.py --chest_x_ray_path cxr_data/files --radiology_reports_path cxr_data/reports/files
 ```
 
-In order to run the model training process, please run the following -ETA 25 mins:
+In order to run the model training process, please run the following -ETA 25 mins.
 
 ```
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
+python run_train.py locking.cxr_filepath data/cxr.h5 locking.txt_filepath data/mimic_impressions.csv
 ```
+
+We support the use of hydra for our experiments, so you can also run:
+
+```
+python run_train.py locking={desired_configuration, e.g. Uu}
+```
+
+and pick the desired configuration to run the training of any of the models!
 
 In order to deal with memory issues with data downloading please use:
 
@@ -57,28 +65,28 @@ python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impress
 In order to run the model training process with the CXR-BERT model for the text stack, include the following at the end of the command.
 
 ```
---use_cxrbert
+locking.use_cxrbert=True
 ```
 
 In order to run the model training process with the ViTMAE image stack you need to include two flags. The first is a boolean flag to indicate you want to use it and the second is a path for the model checkpoint. An example of these flags is as follows.
 
 ```
---use_vitmae --vitmae_path ./masked-autoencoders/output_dir/checkpoint-0.pth
+locking.use_vitmae=True locking.vitmae_path="./masked-autoencoders/output_dir/checkpoint-0.pth"
 ```
 
 In order to train the model with a locked text stack, include the following at the end of the training command.
 
 ```
---lock_text
+locking.lock_text=True
 ```
 
 In order to train the model with a locked vision stack, include the following at the end of the training command.
 
 ```
---lock_vision
+locking.lock_vision=True
 ```
 
-A combination of the above parameter flags may be used to achieve the appropriate experimental training settings. We now list out the full commands for the various experiment options (as denoted by our two character notation).
+A combination of the above parameter flags may be used to achieve the appropriate experimental training settings. We now list out the full commands for the various experiment options (as denoted by our two character notation). We have since made this process easier (see above), you can run any experiments by just specifying the locking parameter and let hydra do the work!
 
 ```
 # uu
