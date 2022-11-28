@@ -80,4 +80,20 @@ All information to setup and download cheXpert and Padchest datasets located in 
 
 # Pre-processing
 
+```
 python run_preprocess.py --csv_out_path=./data/CheXpert/test_labels.csv --dataset_type='chexpert-test' --chest_x_ray_path='./data/CheXpert/'
+```
+
+# Running Automated Zero-Shot Evaluation
+
+The zeroshot_analysis.py python file provides bootstrapped results for a specified set of model pointers. The files takes in several arguments, including:
+
+`--cxr_filepath`, Path to test data for zero-shot analysis.
+
+`--cxr_labels`, Path to true labels for zero shot eval.
+
+`--model_dir`, Directory path for model pointers that need to be evaluated.
+
+`--use_cxrbert`, Boolean flag for indicating model type.
+
+`--results_dir`, Location for storing pandas dataframes as CSVs for bootstrapped results.
