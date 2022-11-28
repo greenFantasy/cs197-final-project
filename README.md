@@ -60,6 +60,12 @@ In order to run the model training process with the CXR-BERT model for the text 
 --use_cxrbert
 ```
 
+In order to run the model training process with the ViTMAE image stack you need to include two flags. The first is a boolean flag to indicate you want to use it and the second is a path for the model checkpoint. An example of these flags is as follows.
+
+```
+--use_vitmae --vitmae_path ./masked-autoencoders/output_dir/checkpoint-0.pth
+```
+
 In order to train the model with a locked text stack, include the following at the end of the training command.
 
 ```
@@ -81,6 +87,18 @@ python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impress
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert
 # uL
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert --lock_text
+# Uu
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH}
+# Lu
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision
+# UU
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_cxrbert
+# LU
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_cxrbert
+# UL
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_cxrbert --lock_text
+# LL
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_cxrbert --lock_text
 ```
 
 # Zero-shot Dataset Downloads
