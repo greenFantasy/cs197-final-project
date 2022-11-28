@@ -63,8 +63,8 @@ class CXRTestDataset(data.Dataset):
     
         return sample
 
-# CJ: added arguments use_vitmae, vitmae_path to pass down; see TODO below
-def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False, vitmae_path=""): 
+# CJ: added argument use_vitmae to pass down; see TODO below
+def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False): 
     """
     FUNCTION: load_clip
     ---------------------------------
@@ -86,12 +86,11 @@ def load_clip(model_path, pretrained=False, context_length=77, use_vitmae=False,
             # TODO: figure out why use_cxrbert is always set to false i.e. why isn't it an argument
             'use_cxrbert': False,
             'use_vitmae': use_vitmae,
-            'vitmae_path': vitmae_path
         }
 
         model = CLIP(**params)
     else: 
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_vitmae=use_vitmae, vitmae_path=vitmae_path) 
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_vitmae=use_vitmae) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 

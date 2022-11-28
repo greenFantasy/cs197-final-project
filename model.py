@@ -272,7 +272,8 @@ class ViTMAE(MaskedAutoencoderViT):
         # extra arguments (unnecessary because we won't realistically change any of them)
         super().__init__(**ViTMAE_ARGS)
         # load model
-        self.load_state_dict(torch.load(vitmae_path)['model'])
+        if vitmae_path:
+            self.load_state_dict(torch.load(vitmae_path)['model'])
 
         # TODO: decide whether to call self.eval() (equivalent to model.eval() in this context)
         # eval only changes dropout and batchnorms; it doesn't affect the gradients at all, and it looks like we have
@@ -383,8 +384,6 @@ class CLIP(nn.Module):
 
         # CJ: very simple init for now that just loads the model from the checkpoint filepath
         if self.use_vitmae:
-            if not vitmae_path:
-                raise ValueError("No path provided for ViTMAE")
             self.visual = ViTMAE(vitmae_path, embed_dim, image_resolution)
         elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
