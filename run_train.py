@@ -1,6 +1,7 @@
 import os
 import pprint
 import argparse
+import hydra
 from tqdm import tqdm
 
 import torch
@@ -38,7 +39,11 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def model_pipeline(config, verbose=0): 
+@hydra.main(version_base=None, config_path="configs", config_name="defaults.yaml")
+def model_pipeline(config): #, verbose=0): 
+    print(config)
+    config = config.locking
+    print([(k, v) for k, v in config.items()])
     # make the model, data, and optimization problem
     model, data_loader, device, criterion, optimizer = make(config)
 
@@ -153,8 +158,8 @@ def save(model, path):
     torch.save(model.state_dict(), path)
     
 if __name__ == "__main__":
-    args = parse_args()
-    print(args)
-    model = model_pipeline(args)
+    # args = parse_args()
+    # print(args)
+    model = model_pipeline()
     
 

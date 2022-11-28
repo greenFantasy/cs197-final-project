@@ -2,6 +2,7 @@
 checkpoints/*
 data/*
 !data/README.md
+.hydra/
 
 .DS_Store
 
