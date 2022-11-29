@@ -16,6 +16,11 @@ from pathlib import Path
 import torch
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 
+from health_multimodal.image.data.io import load_image
+
+BIOVIL_TRANSFORM_RESIZE = 512
+BIOVIL_TRANSFORM_CENTER_CROP_SIZE = 480
+
 def load_data(filepath):
     dataframe = pd.read_csv(filepath)
     return dataframe
@@ -58,6 +63,25 @@ def img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, resolution
                 img_pil = Image.fromarray(img)
                 # preprocess
                 img = preprocess(img_pil, desired_size=resolution)     
+                img_dset[idx] = img
+            except Exception as e: 
+                failed_images.append((path, e))
+    print(f"{len(failed_images)} / {len(cxr_paths)} images failed to be added to h5.", failed_images)
+
+def biovil_img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, resolution=BIOVIL_TRANSFORM_RESIZE): 
+    """
+    Convert directory of images into a .h5 file given paths to all 
+    images. 
+    """
+    dset_size = len(cxr_paths)
+    failed_images = []
+    resize = Resize(resolution)
+    with h5py.File(out_filepath,'w') as h5f:
+        img_dset = h5f.create_dataset('cxr', shape=(dset_size, resolution, resolution))    
+        for idx, path in enumerate(tqdm(cxr_paths)):
+            try: 
+                # read image using cv2
+                img = resize(load_image(path))
                 img_dset[idx] = img
             except Exception as e: 
                 failed_images.append((path, e))

@@ -7,12 +7,15 @@ from tqdm.notebook import tqdm
 
 from PIL import Image
 import h5py
+from pathlib import Path
 
 import torch
 from torch.utils import data
 from torch import nn
 import torch.optim as optim
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
+
+from health_multimodal.image.data.io import load_image
 
 import sys
 sys.path.append('../..')
@@ -33,13 +36,20 @@ class CXRDataset(data.Dataset):
         data_cache_size: Number of HDF5 files that can be cached in the cache (default=3).
         transform: PyTorch transform to apply to every data instance (default=None).
     """
-    def __init__(self, img_path, txt_path, column='report', size=None, transform=None):
+    def __init__(self, img_path, txt_path, column='report', size=None, transform=None, use_biovision=False):
         super().__init__()
+        self.use_biovision = use_biovision
         if size != None: 
-            self.img_dset = h5py.File(img_path, 'r')['cxr_unprocessed'][:size]
+            if not self.use_biovision:
+                self.img_dset = h5py.File(img_path, 'r')['cxr_unprocessed'][:size]
+            else:
+                self.img_dset = img_path # img_path is a list of paths
             self.txt_dset = pd.read_csv(txt_path)[column][:size]
         else: 
-            self.img_dset = h5py.File(img_path, 'r')['cxr']
+            if not self.use_biovision:
+                self.img_dset = h5py.File(img_path, 'r')['cxr']
+            else:
+                self.img_dset = img_path # img_path is a list of paths
             self.txt_dset = pd.read_csv(txt_path)[column]
         self.transform = transform
             
@@ -49,22 +59,47 @@ class CXRDataset(data.Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-            
+        
         img = self.img_dset[idx] # np array, (320, 320)
-        img = np.expand_dims(img, axis=0)
-        img = np.repeat(img, 3, axis=0)
+        if not self.use_biovision:
+            img = np.expand_dims(img, axis=0)
+            img = np.repeat(img, 3, axis=0)
+
+            img = torch.from_numpy(img) # torch, (3, 320, 320)
+
+        else:
+            img_path = img
+            if isinstance(img_path, str):
+                img_path = Path(img_path)
+            img = load_image(img_path)
+            
+        if self.transform:
+            img = self.transform(img)
+
         txt = self.txt_dset[idx] # python str
         if type(txt) == type(float("nan")): # capture the case of empty "Impression" sections
             txt = " "
-
-        img = torch.from_numpy(img) # torch, (3, 320, 320)
-        if self.transform:
-            img = self.transform(img)
         sample = {'img': img, 'txt': txt }
         
         return sample
 
-def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrained=False, verbose=False): 
+def get_biovil_transform():
+    TRANSFORM_RESIZE = 512
+    TRANSFORM_CENTER_CROP_SIZE = 480
+    
+    biovil_transform = create_chest_xray_transform_for_inference(
+        resize=TRANSFORM_RESIZE,
+        center_crop_size=TRANSFORM_CENTER_CROP_SIZE,
+    )
+    
+    return biovil_transform
+
+class DefaultBiovisionConfig:
+    def __init__(self):
+        self.use_biovision = False
+        self.img_path_list = None
+
+def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrained=False, verbose=False, biovision_config=DefaultBiovisionConfig()): 
     if torch.cuda.is_available():  
         dev = "cuda:0" 
         cuda_available = True
@@ -80,31 +115,41 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
         torch.cuda.set_device(device)
 
     if pretrained: 
-        input_resolution = 224
-        transform = Compose([
-            Normalize((101.48761, 101.48761, 101.48761), (83.43944, 83.43944, 83.43944)),
-            Resize(input_resolution, interpolation=InterpolationMode.BICUBIC),
-        ])
-        print('Interpolation Mode: ', InterpolationMode.BICUBIC)
+        if not biovision_config.use_biovision:
+            input_resolution = 224
+            transform = Compose([
+                Normalize((101.48761, 101.48761, 101.48761), (83.43944, 83.43944, 83.43944)),
+                Resize(input_resolution, interpolation=InterpolationMode.BICUBIC),
+            ])
+            print('Interpolation Mode: ', InterpolationMode.BICUBIC)
+        else:
+            transform = get_biovil_transform()
         print("Finished image transforms for pretrained model.")
+        print(f"Transforms: {transform}")
     else: 
+        if biovision_config.use_biovision:
+            raise Exception("Biovision not configured for non-pretrained models.")
         input_resolution = 320
         transform = Compose([
             Normalize((101.48761, 101.48761, 101.48761), (83.43944, 83.43944, 83.43944)),
         ])
         print("Finished image transforms for clip model.")
+            
+    torch_dset = CXRDataset(img_path=biovision_config.img_path_list if biovision_config.use_biovision else cxr_filepath,
+                        txt_path=txt_filepath, column=column, transform=transform, use_biovision=biovision_config.use_biovision)
     
-    torch_dset = CXRDataset(img_path=cxr_filepath,
-                        txt_path=txt_filepath, column=column, transform=transform)
+    if biovision_config.use_biovision:
+        print("Using dataset with biovision")
+        print(f"Example of an image path: {torch_dset.img_dset[0]}")
     
-    if verbose: 
-        for i in range(len(torch_dset)):
-            sample = torch_dset[i]
-            plt.imshow(sample['img'][0])
-            plt.show()
-            print(i, sample['img'].size(), sample['txt'])
-            if i == 3:
-                break
+    # if verbose: 
+    #     for i in range(len(torch_dset)):
+    #         sample = torch_dset[i]
+    #         plt.imshow(sample['img'][0])
+    #         plt.show()
+    #         print(i, sample['img'].size(), sample['txt'])
+    #         if i == 3:
+    #             break
     
     loader_params = {'batch_size':batch_size, 'shuffle': True, 'num_workers': 0}
     data_loader = data.DataLoader(torch_dset, **loader_params)
