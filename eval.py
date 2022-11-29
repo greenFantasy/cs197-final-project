@@ -228,3 +228,37 @@ def bootstrap(y_pred, y_true, cxr_labels, n_samples=1000, label_idx_map=None):
 
     boot_stats = pd.concat(boot_stats) # pandas array of evaluations for each sample
     return boot_stats, compute_cis(boot_stats)
+
+def paired_bootstrap(y_preds, y_true, cxr_labels, n_samples=1000, label_idx_map=None): 
+    '''
+    This function will randomly sample with replacement 
+    from y_pred and y_true then evaluate `n` times
+    and obtain AUROC scores for each. 
+    
+    You can specify the number of samples that should be
+    used with the `n_samples` parameter. 
+    
+    Confidence intervals will be generated from each 
+    of the samples. 
+    
+    Note: 
+    * n_total_labels >= n_cxr_labels
+        `n_total_labels` is greater iff alternative labels are being tested
+    '''
+    np.random.seed(97)
+    # y_pred # (500, n_total_labels)
+    # y_true # (500, n_cxr_labels) 
+    
+    idx = np.arange(len(y_true))
+    
+    boot_stats = []
+    for i in tqdm(range(n_samples)): 
+        sample = resample(idx, replace=True, random_state=i)
+        y_pred_sample = y_pred[sample]
+        y_true_sample = y_true[sample]
+        
+        sample_stats = evaluate(y_pred_sample, y_true_sample, cxr_labels, label_idx_map=label_idx_map)
+        boot_stats.append(sample_stats)
+
+    boot_stats = pd.concat(boot_stats) # pandas array of evaluations for each sample
+    return boot_stats, compute_cis(boot_stats)
