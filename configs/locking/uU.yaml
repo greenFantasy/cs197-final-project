@@ -3,13 +3,13 @@ txt_filepath: '../CheXzero/data/mimic_impressions.csv'
 model_path: None
 batch_size: 16
 epochs: 3
-lr: 1e-4
+lr: 7e-5
 save_interval: 1000
 log_interval: 10
 save_dir: "./checkpoints/" 
 seed: 1234
 optimizer: "sgd"
-momentum: 0.9
+momentum: 0.92
 context_length: 77
 random_init: False
 model_name: "uU"
