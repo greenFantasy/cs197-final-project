@@ -30,6 +30,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from transformers import AutoModel, AutoTokenizer
+from biovil_inference import get_biovil_resnet as BioVision
 
 
 
@@ -274,6 +275,8 @@ class VisualTransformer(nn.Module):
 
         return x
 
+# bit hacky
+BIOVIL_EMBED_DIM = 128
 
 class CLIP(nn.Module):
     def __init__(self,
@@ -289,14 +292,18 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_cxrbert: bool
+                 use_cxrbert: bool,
+                 use_biovision: bool
                  ):
         super().__init__()
 
         self.context_length = context_length
         self.use_cxrbert = use_cxrbert
+        self.use_biovision = use_biovision
 
-        if isinstance(vision_layers, (tuple, list)):
+        if self.use_biovision:
+            self.visual = BioVision()
+        elif isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
                 layers=vision_layers,
@@ -323,14 +330,18 @@ class CLIP(nn.Module):
                 heads=transformer_heads,
                 attn_mask=self.build_attention_mask()
             )
-            self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
+            if self.use_biovision:
+                self.text_projection = nn.Parameter(torch.empty(transformer_width, BIOVIL_EMBED_DIM))
+            else:
+                self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         else:
             self.transformer = CXRBERT()
             url = "microsoft/BiomedVLP-CXR-BERT-specialized"
             self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
             
             # vision project head init
-            self.vision_projection = nn.Parameter(torch.empty(embed_dim, self.transformer.width))
+            if not self.use_biovision:
+                self.vision_projection = nn.Parameter(torch.empty(embed_dim, self.transformer.width))
 
         self.vocab_size = vocab_size
         self.token_embedding = nn.Embedding(vocab_size, transformer_width)
@@ -345,7 +356,7 @@ class CLIP(nn.Module):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
         nn.init.normal_(self.positional_embedding, std=0.01)
 
-        if isinstance(self.visual, ModifiedResNet):
+        if not self.use_biovision and isinstance(self.visual, ModifiedResNet):
             if self.visual.attnpool is not None:
                 std = self.visual.attnpool.c_proj.in_features ** -0.5
                 nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
@@ -379,12 +390,13 @@ class CLIP(nn.Module):
         mask.triu_(1)  # zero out the lower diagonal
         return mask
 
+    # TODO: this should still work with BioVision but flagging regardless
     @property
     def dtype(self):
         return self.visual.conv1.weight.dtype
 
     def encode_image(self, image):
-        if self.use_cxrbert:
+        if self.use_cxrbert and not self.use_biovision:
             return self.visual(image.type(self.dtype)) @ self.vision_projection
         return self.visual(image.type(self.dtype))
 
@@ -446,8 +458,8 @@ def convert_weights(model: nn.Module):
                     attr.data = attr.data.half()
 
     model.apply(_convert_weights_to_fp16)
-    
 
+# this function is only called if we're not doing full BioVIL
 def update_state_dict(state_dict: dict, model: nn.Module):
     """
     Creates an updated state dict object by starting with the model's state dict
@@ -457,13 +469,20 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     updated_state_dict = model.state_dict().copy()
     # filter out entries from state_dict that aren't in the model's state dict 
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
-    
+    if model.use_biovision:
+        items_to_update = {k: v for k, v in items_to_update.items() if k.startswith('visual')}
+        if model.use_cxrbert:
+            raise Exception('this function should not be called if both use_cxrbert and use_biovision are true')
+        # dimensions won't line up so don't use text projection
+        del items_to_update['text_projection']
+    # TODO: remove after testing
+    print("items to update: ", items_to_update.keys())
     # perform the update for the new state dict
     updated_state_dict.update(items_to_update)
     return updated_state_dict
 
 
-def build_model(state_dict: dict, use_cxrbert=False):
+def build_model(state_dict: dict, use_cxrbert=False, use_biovision=False):
 
     vit = "visual.proj" in state_dict
 
@@ -493,7 +512,7 @@ def build_model(state_dict: dict, use_cxrbert=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert, use_biovision
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:
@@ -502,8 +521,10 @@ def build_model(state_dict: dict, use_cxrbert=False):
 
     if not model.use_cxrbert:
         convert_weights(model)
-        
-    updated_state_dict = update_state_dict(state_dict, model)
-    model.load_state_dict(updated_state_dict)
+
+    # only update if we're not doing full BioViL
+    if not (use_biovision and use_cxrbert):
+        updated_state_dict = update_state_dict(state_dict, model)
+        model.load_state_dict(updated_state_dict)
 
     return model.eval()

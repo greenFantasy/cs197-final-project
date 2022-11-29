@@ -110,7 +110,7 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=False):
+def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=False, use_biovision=False):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -137,7 +137,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
         'transformer_width': 512,
         'transformer_heads': 8,
         'transformer_layers': 12,
-        'use_cxrbert': use_cxrbert
+        'use_cxrbert': use_cxrbert,
+        'use_biovision': use_biovision
     }
     
     # set device 
@@ -145,7 +146,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
     
     if pretrained: 
         # load clip pre-trained model
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert)
+        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, 
+                                      use_biovision=use_biovision)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -194,7 +196,8 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
         * model_path - string, filepath to previously trained model
     '''
     data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=config.batch_size, pretrained=config.pretrained, column=config.column)
-    model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length)
+    model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length, 
+                      use_biovision=config.use_biovision)
     model.to(device)
     print('Model on Device.')
 
@@ -204,7 +207,7 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
     optimizer = optim.AdamW(model.parameters(), lr=config.lr)
     return model, data_loader, device, criterion, optimizer
 
-
+# TODO: this function is unused so didn't modify but flagging anyway
 def train_main(cxr_filepath, txt_filepath, hyperparams, output_path, model_path=None, pretrained=False): 
     '''
     args: 
