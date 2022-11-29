@@ -29,7 +29,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
+
 
 
 class Bottleneck(nn.Module):
@@ -325,7 +326,11 @@ class CLIP(nn.Module):
             self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         else:
             self.transformer = CXRBERT()
-            self.text_projection = nn.Parameter(torch.empty(self.transformer.width, embed_dim))
+            url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+            
+            # vision project head init
+            self.vision_projection = nn.Parameter(torch.empty(embed_dim, self.transformer.width))
 
         self.vocab_size = vocab_size
         self.token_embedding = nn.Embedding(vocab_size, transformer_width)
@@ -363,7 +368,7 @@ class CLIP(nn.Module):
                 nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
                 nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
-        if self.text_projection is not None:
+        if hasattr(self, "text_projection") and self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
 
     def build_attention_mask(self):
@@ -379,6 +384,8 @@ class CLIP(nn.Module):
         return self.visual.conv1.weight.dtype
 
     def encode_image(self, image):
+        if self.use_cxrbert:
+            return self.visual(image.type(self.dtype)) @ self.vision_projection
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
@@ -396,7 +403,7 @@ class CLIP(nn.Module):
             x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
         else:
             x = text.input_ids
-            x = self.transformer.model.get_projected_text_embeddings(x, text.attention_mask) @ self.text_projection
+            x = self.transformer.model.get_projected_text_embeddings(x, text.attention_mask)
 
         return x
 
@@ -450,9 +457,7 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     updated_state_dict = model.state_dict().copy()
     # filter out entries from state_dict that aren't in the model's state dict 
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
-    # filter out the text projection update if we aren't using the CheXzero text stack
-    if model.use_cxrbert:
-        del items_to_update['text_projection']
+    
     # perform the update for the new state dict
     updated_state_dict.update(items_to_update)
     return updated_state_dict
@@ -476,6 +481,7 @@ def build_model(state_dict: dict, use_cxrbert=False):
         vision_patch_size = None
         assert output_width ** 2 + 1 == state_dict["visual.attnpool.positional_embedding"].shape[0]
         image_resolution = output_width * 32
+
 
     embed_dim = state_dict["text_projection"].shape[1]
     context_length = state_dict["positional_embedding"].shape[0]

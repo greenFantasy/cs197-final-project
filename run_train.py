@@ -68,7 +68,10 @@ def make(config):
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
-    params_list.append(model.text_projection)
+    if config.use_cxrbert:
+        params_list.append(model.vision_projection)
+    else:
+        params_list.append(model.text_projection)
     if not config.lock_text:
         params_list.append(model.transformer.parameters())
         if not config.use_cxrbert:
