@@ -114,10 +114,26 @@ def get_mean_auc(pred_df, label_df, pathologies):
 # neg_emb = get_text_embeddings(neg_prompts)
 
 if __name__ == "__main__":
-    biovil_prompts = True
-    model = get_biovil_model()
+    biovil_prompts = False
+    generate = False
     test_csv_path = "../OLD_REPO/cs197-final-project/data/CheXpert/test_labels.csv"
     data_df, cxr_labels = get_test_data(test_csv_path)
-    pred_df = generate_preds(model, data_df, cxr_labels, biovil_prompts=biovil_prompts)
-    save_preds(pred_df, biovil_prompts=biovil_prompts)
-    print(get_mean_auc(pred_df, data_df, cxr_labels))
+    
+    if generate:
+        print(f"Generating predictions with {'CheXzero' if not biovil_prompts else 'BioViL'} prompts")
+        model = get_biovil_model()
+        pred_df = generate_preds(model, data_df, cxr_labels, biovil_prompts=biovil_prompts)
+        save_preds(pred_df, biovil_prompts=biovil_prompts)
+        
+    else:
+        print(f"Using saved predictions with {'CheXzero' if not biovil_prompts else 'BioViL'} prompts")
+        if not biovil_prompts:
+            path = "results/biovil_chexpert_preds.csv"
+        else:
+            path = "results/biovil_chexpert_preds_biovil_prompts.csv"
+        pred_df = pd.read_csv(path)
+    
+    auc_df = get_mean_auc(pred_df, data_df, cxr_labels)
+        
+    for row in auc_df.iterrows():
+        print(row)
