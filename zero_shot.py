@@ -185,7 +185,7 @@ def predict(loader, model, zeroshot_weights, softmax_eval=True, verbose=0):
 
             # obtain logits
             logits = image_features @ zeroshot_weights # (1, num_classes)
-            logits = np.squeeze(logits.numpy(), axis=0) # (num_classes,)
+            logits = np.squeeze(logits.to("cpu").numpy(), axis=0) # (num_classes,)
         
             if softmax_eval is False: 
                 norm_logits = (logits - logits.mean()) / (logits.std())
@@ -202,7 +202,8 @@ def predict(loader, model, zeroshot_weights, softmax_eval=True, verbose=0):
                 print('image_features size: ', image_features.size())
                 print('logits: ', logits)
                 print('logits size: ', logits.size())
-         
+    
+    model.to("cpu")
     y_pred = np.array(y_pred)
     return np.array(y_pred)
 
