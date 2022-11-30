@@ -75,5 +75,3 @@ if __name__ == "__main__":
     
     # print(biovil.shape, chexzero.shape) # torch.abs(biovil - chexzero).sum())
 
-
-

@@ -1,3 +1,5 @@
+defaults:
+  - biovision: bio
 cxr_filepath: 'data/cxr.h5'
 txt_filepath: 'data/mimic_impressions.csv'
 model_path: None
@@ -15,4 +17,4 @@ random_init: False
 model_name: "Lu"
 use_cxrbert: False
 lock_text: False
-lock_vision: False
+lock_vision: True

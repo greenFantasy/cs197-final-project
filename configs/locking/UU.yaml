@@ -1,3 +1,6 @@
+defaults:
+  - biovision: bio
+
 cxr_filepath: 'data/cxr.h5'
 txt_filepath: 'data/mimic_impressions.csv'
 model_path: None
@@ -13,6 +16,6 @@ momentum: 0.9
 context_length: 77
 random_init: False
 model_name: "UU"
-use_cxrbert: False
+use_cxrbert: True
 lock_text: False
 lock_vision: False

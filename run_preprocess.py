@@ -14,6 +14,8 @@ def parse_args():
     parser.add_argument('--radiology_reports_path', default='/deep/group/data/med-data/files/', help="Directory radiology reports are stored. This should point to the files folder from the MIMIC radiology reports dataset.")
     parser.add_argument('--biovil', action='store_true', help="Process images to be used by biovil image model.")
     args = parser.parse_args()
+    
+    print(f"Generating {'biovil' if args.biovil else 'CheXzero'} h5 file")
     if args.biovil and 'biovil' not in args.cxr_out_path:
         args.cxr_out_path = (".".join(args.cxr_out_path.split(".")[:-1]) + "_biovil") + ".h5"
         print(f"Changing cxr_out_path to {args.cxr_out_path} to account for biovil")
