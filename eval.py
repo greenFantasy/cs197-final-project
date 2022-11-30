@@ -10,7 +10,7 @@ from pathlib import Path
 
 import torch
 from torch.utils import data
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import torch.nn as nn
 from torchvision.transforms import Compose, Normalize, Resize
 

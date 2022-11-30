@@ -11,10 +11,15 @@ def parse_args():
     parser.add_argument('--cxr_labels', type=str, default='data/CheXpert/test_labels.csv', help="True labels for zeroshot.")
     parser.add_argument('--model_path', type=str, default="")
     parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--use_biovision', action='store_true')
+    parser.add_argument('--image_csv_path', type=str, default='data/CheXpert/test_labels.csv')
     parser.add_argument('--results_dir', type=str, default="predictions")
     args = parser.parse_args()
     
     assert args.model_path.split("/")[0] == "checkpoints", "Checkpoint must be in checkpoints folder"
+    
+    if args.use_biovision and not args.image_csv_path:
+        raise ValueError("Must define image_csv_path if use_biovision=True")
     
     return args
 
@@ -27,6 +32,8 @@ def generate_predictions(config, model_paths):
     cxr_pair_template = ("{}", "no {}")
     cache_dir = None
     use_cxrbert = config.use_cxrbert
+    use_biovision = config.use_biovision
+    image_csv_path = config.image_csv_path
     
     predictions, _ = zero_shot.ensemble_models(
         model_paths=model_paths, 
@@ -34,7 +41,9 @@ def generate_predictions(config, model_paths):
         cxr_labels=cxr_labels, 
         cxr_pair_template=cxr_pair_template, 
         cache_dir=cache_dir,
-        use_cxrbert=use_cxrbert
+        use_cxrbert=use_cxrbert,
+        use_biovision=use_biovision,
+        image_csv_path=image_csv_path
     )
     
     for model_path, pred in zip(model_paths, predictions):
