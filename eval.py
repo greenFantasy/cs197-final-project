@@ -233,6 +233,13 @@ def bootstrap(y_pred, y_true, cxr_labels, n_samples=1000, label_idx_map=None):
     boot_stats = pd.concat(boot_stats) # pandas array of evaluations for each sample
     return boot_stats, compute_cis(boot_stats)
 
+def mean_confidence_interval(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return m, m-h, m+h
+
 def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, label_idx_map=None): 
     '''
     This function will randomly sample with replacement 
@@ -279,6 +286,7 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
         row = idx // num_cols
         col = idx % num_cols
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
+        mean, lower, upper = mean_confidence_interval(pathology_diffs, confidence=0.95)
         perc = (pathology_diffs > 0).sum() / len(pathology_diffs) * 100
         avg = pathology_diffs.mean()
         threshold = 25
@@ -293,6 +301,8 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
         title = f"{pathology[:-4]} AUC"
         axs[row, col].set_title(r"\textbf{" + title + "}" + f"\n Percentile Above Zero: {perc:.2f}% \n Mean: {float(pathology_diffs.mean()):.4f}")
         axs[row, col].axvline(0, 0, 1, color="black")
+        axs[row, col].axvline(upper, 0, 1, color="red")
+        axs[row, col].axvline(lower, 0, 1, color="red")
     axs[-1,-1].set_axis_off()
     axs[-1,-2].set_axis_off()
     fig.suptitle(r"\textbf{" + f"({model1_name} - {model2_name}) {metric} Paired Bootstrap" + "}", fontsize=25)
