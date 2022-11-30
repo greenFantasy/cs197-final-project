@@ -10,7 +10,7 @@ from pathlib import Path
 
 import torch
 from torch.utils import data
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import torch.nn as nn
 from torchvision.transforms import Compose, Normalize, Resize
 
@@ -22,6 +22,10 @@ from sklearn.utils import resample
 
 import scipy
 import scipy.stats
+import seaborn as sns
+
+from matplotlib import rc
+rc('text', usetex=True)
 
 import sys
 sys.path.append('../..')
@@ -269,14 +273,29 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
     num_pathologies = len(pathologies)
     num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
     fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(15, 20))
+    fig.subplots_adjust(hspace=0.5, wspace=0.5)
     diffs = df1.to_numpy() - df2.to_numpy()
     for idx, pathology in enumerate(pathologies):
         row = idx // num_cols
         col = idx % num_cols
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
-        axs[row, col].hist(pathology_diffs)
-        axs[row, col].set_title(f"{pathology} mean diff: {float(pathology_diffs.mean()):.4f}")
-    fig.suptitle(f"{model1_name} - {model2_name} {metric} Paired Bootstrap")
+        perc = (pathology_diffs > 0).sum() / len(pathology_diffs) * 100
+        avg = pathology_diffs.mean()
+        threshold = 25
+        if threshold < perc < 100 - threshold:
+            color = "orange"
+        elif perc <= threshold:
+            color = "red"
+        else:
+            color = "green"
+        
+        sns.distplot(pathology_diffs, ax=axs[row, col], color=color)
+        title = f"{pathology[:-4]} AUC"
+        axs[row, col].set_title(r"\textbf{" + title + "}" + f"\n Percentile Above Zero: {perc:.2f}% \n Mean: {float(pathology_diffs.mean()):.4f}")
+        axs[row, col].axvline(0, 0, 1, color="black")
+    axs[-1,-1].set_axis_off()
+    axs[-1,-2].set_axis_off()
+    fig.suptitle(r"\textbf{" + f"({model1_name} - {model2_name}) {metric} Paired Bootstrap" + "}", fontsize=25)
     save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{metric}-Paired-Bootstrap.png")
     fig.savefig(save_path) 
     print(f"Saving figure to {save_path}")
