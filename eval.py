@@ -268,13 +268,14 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
     pathologies = df1.columns
     num_pathologies = len(pathologies)
     num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
-    fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(5.5, 3.5))
+    fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(15, 20))
     diffs = df1.to_numpy() - df2.to_numpy()
     for idx, pathology in enumerate(pathologies):
         row = idx // num_cols
         col = idx % num_cols
-        axs[row, col].hist(diffs[idx])
-        axs[row, col].set_title(pathology)
+        pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
+        axs[row, col].hist(pathology_diffs)
+        axs[row, col].set_title(f"{pathology} mean diff: {float(pathology_diffs.mean()):.4f}")
     fig.suptitle(f"{model1_name} - {model2_name} {metric} Paired Bootstrap")
     save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{metric}-Paired-Bootstrap.png")
     fig.savefig(save_path) 
