@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from data_process import get_cxr_paths_list, img_to_hdf5, get_cxr_path_csv, write_report_csv
+from data_process import get_cxr_paths_list, img_to_hdf5, get_cxr_path_csv, write_report_csv, biovil_img_to_hdf5
 from preprocess_padchest import img_to_h5
 
 
@@ -12,7 +12,13 @@ def parse_args():
     parser.add_argument('--mimic_impressions_path', default='data/mimic_impressions.csv', help="Directory to save extracted impressions from radiology reports.")
     parser.add_argument('--chest_x_ray_path', default='/deep/group/data/mimic-cxr/mimic-cxr-jpg/2.0.0/files', help="Directory where chest x-ray image data is stored. This should point to the files folder from the MIMIC chest x-ray dataset.")
     parser.add_argument('--radiology_reports_path', default='/deep/group/data/med-data/files/', help="Directory radiology reports are stored. This should point to the files folder from the MIMIC radiology reports dataset.")
+    parser.add_argument('--biovil', action='store_true', help="Process images to be used by biovil image model.")
     args = parser.parse_args()
+    
+    print(f"Generating {'biovil' if args.biovil else 'CheXzero'} h5 file")
+    if args.biovil and 'biovil' not in args.cxr_out_path:
+        args.cxr_out_path = (".".join(args.cxr_out_path.split(".")[:-1]) + "_biovil") + ".h5"
+        print(f"Changing cxr_out_path to {args.cxr_out_path} to account for biovil")
     return args
 
 if __name__ == "__main__":
@@ -21,7 +27,10 @@ if __name__ == "__main__":
         # Write Chest X-ray Image HDF5 File
         get_cxr_path_csv(args.csv_out_path, args.chest_x_ray_path)
         cxr_paths = get_cxr_paths_list(args.csv_out_path)
-        img_to_hdf5(cxr_paths, args.cxr_out_path)
+        if not args.biovil:
+            img_to_hdf5(cxr_paths, args.cxr_out_path)
+        else:
+            biovil_img_to_hdf5(cxr_paths, args.cxr_out_path)
 
         #Write CSV File Containing Impressions for each Chest X-ray
         write_report_csv(cxr_paths, args.radiology_reports_path, args.mimic_impressions_path)
