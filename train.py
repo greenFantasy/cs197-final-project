@@ -13,7 +13,6 @@ from torch.utils import data
 from torch import nn
 import torch.optim as optim
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
-from transformers import AutoTokenizer
 
 import sys
 sys.path.append('../..')
@@ -176,9 +175,8 @@ def preprocess_text(texts, model):
             result[i, :len(tokens)] = torch.tensor(tokens)
         return result
     else:
-        url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-        tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
-        return tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
+        
+        return model.tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
                                                 add_special_tokens=True,
                                                 padding='longest',
                                                 return_tensors='pt')
