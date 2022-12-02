@@ -3,6 +3,8 @@ import pprint
 import argparse
 import hydra
 from tqdm import tqdm
+import wandb
+from omegaconf import OmegaConf
 
 import torch
 from torch.utils import data
@@ -94,6 +96,10 @@ def train(model, loader, device, criterion, optimizer, config):
     if not os.path.exists(model_save_dir): 
         # Create a new folder if not exists
         os.makedirs(model_save_dir)
+        
+    # login to wandb and initialize it
+    wandb.login()
+    wandb.init(project="cs197-final-project", config=OmegaConf.to_container(config, resolve=True))
     
     # Run training
     total_batches = len(loader) * config.epochs
@@ -122,12 +128,14 @@ def train(model, loader, device, criterion, optimizer, config):
                 train_log(running_loss / report_freq, example_ct, epoch)
                 running_loss = 0.0
             
-            if (batch_ct % config.save_interval) == 0: 
-                model_path = os.path.join(model_save_dir, "checkpoint_{batch_ct}.pt".format(
-                    batch_ct=str(batch_ct), 
-                ))
+            if (batch_ct % config.save_interval) == 0:
+                checkpoint_name =  "checkpoint_{batch_ct}.pt".format(batch_ct=str(batch_ct))
+                model_path = os.path.join(model_save_dir, checkpoint_name)
                 print("Saved checkpoint to: ", model_path)
-                save(model, model_path)
+                # save checkpoint
+                save(model, model_path, checkpoint_name)
+                
+    wandb.finish()
                 
 def train_batch(images, texts, model, device, criterion, optimizer):
     images, texts = images.to(device), texts.to(device)
@@ -156,9 +164,15 @@ def train_batch(images, texts, model, device, criterion, optimizer):
 def train_log(loss, example_ct, epoch):
     loss = float(loss)
     print(f"Loss after " + str(example_ct).zfill(5) + f" examples: {loss:.3f}")
+    wandb.log({'loss': loss, 'example_ct': example_ct, 'epoch': epoch})
     
-def save(model, path): 
+def save(model, path, checkpoint_name): 
+    # save checkpoint locally
     torch.save(model.state_dict(), path)
+    # save checkpoint to wandb
+    artifact = wandb.Artifact(name=checkpoint_name, type='model_checkpoint')
+    artifact.add_file(local_path=path)
+    wandb.run.log_artifact(artifact)
     
 if __name__ == "__main__":
     # args = parse_args()
