@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--use_cxrbert', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
+    parser.add_argument('--path_list_path', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
     args = parser.parse_args()
     return args
 
@@ -54,13 +55,13 @@ def model_pipeline(config): #, verbose=0):
     model_path = os.path.join(config.save_dir, str(config.model_name), 'checkpoint.pt')
     save(model, model_path)
 
-    if verbose: 
-        print(model)
+    # if verbose: 
+    #    print(model)
     return model
 
 def make(config): 
     pretrained = not config.random_init
-    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
+    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
     model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
     model.to(device)
     print('Model on Device.')
