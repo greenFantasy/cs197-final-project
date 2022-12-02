@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 import pandas as pd
 
 from eval import paired_bootstrap
@@ -11,6 +12,7 @@ def parse_args():
     parser.add_argument('--pred_csv_paths', type=str, required=True)
     parser.add_argument('--num_samples', type=int, default=1000)
     parser.add_argument('--true_label_path', type=str, default="../cheXpert-test-set-labels/groundtruth.csv")
+    parser.add_argument('--table', action='store_true')
     args = parser.parse_args()
         
     return args
@@ -45,3 +47,20 @@ if __name__ == "__main__":
         plot_paired_bootstrap(model1_name, model2_name, paired_dfs[model1_name], paired_dfs[model2_name])
     else:
         print(f"Not plotting, number of things to compare is {len(paired_dfs)}")
+        
+    if args.table:
+        data = [[] for _ in model_names]
+        for i, model_name in enumerate(model_names):
+            numpy_data = paired_dfs[model_name].to_numpy()
+            means = np.nanmean(numpy_data, axis=0).tolist()
+            lowers = np.nanquantile(numpy_data, 0.05, axis=0).tolist()
+            uppers = np.nanquantile(numpy_data, 0.95, axis=0).tolist()
+            assert len(lowers) == len(means), "Mean and lower quantile should have same length"
+            data[i] = [f"{m:.3f} ({l:.3f}, {u:.3f})" for m, l, u in zip(means, lowers, uppers)]
+        table = pd.DataFrame(columns=pathologies, data=data)
+        table["Configuration"] = model_names
+        table = table[[ *(["Configuration"] + list(pathologies)) ]]
+        split_point = 7
+        print(table.iloc[:, :split_point].to_latex(index=False))
+        print(table.iloc[:, split_point:].to_latex(index=False))
+        table.to_csv("results/table.csv", index=False)
