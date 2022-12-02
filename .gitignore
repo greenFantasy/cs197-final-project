@@ -4,6 +4,7 @@ data/*
 !data/README.md
 .hydra/
 cxr_data/*
+results/*
 
 .DS_Store
 
