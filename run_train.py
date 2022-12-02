@@ -101,6 +101,12 @@ def train(model, loader, device, criterion, optimizer, config):
     wandb.login()
     wandb.init(project="cs197-final-project", entity="team_rack", config=OmegaConf.to_container(config, resolve=True))
     
+    # save initial model
+    init_checkpoint_name = "checkpoint_init.pt"
+    init_model_path = os.path.join(model_save_dir, init_checkpoint_name)
+    print("Saved initial model to: ", init_model_path)
+    save(model, init_model_path, init_checkpoint_name)
+    
     # Run training
     total_batches = len(loader) * config.epochs
     example_ct = 0  # number of examples seen
