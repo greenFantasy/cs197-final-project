@@ -1,10 +1,10 @@
-cxr_filepath: 'data/cxr.h5'
-txt_filepath: 'data/mimic_impressions.csv'
+cxr_filepath: '../CheXzero/data/cxr.h5'
+txt_filepath: '../CheXzero/data/mimic_impressions.csv'
 model_path: None
 batch_size: 16
-epochs: 10
+epochs: 3
 lr: 1e-4
-save_interval: 500
+save_interval: 1000
 log_interval: 10
 save_dir: "./checkpoints/" 
 seed: 1234
