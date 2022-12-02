@@ -10,7 +10,7 @@ from pathlib import Path
 
 import torch
 from torch.utils import data
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import torch.nn as nn
 from torchvision.transforms import Compose, Normalize, Resize
 
@@ -228,3 +228,55 @@ def bootstrap(y_pred, y_true, cxr_labels, n_samples=1000, label_idx_map=None):
 
     boot_stats = pd.concat(boot_stats) # pandas array of evaluations for each sample
     return boot_stats, compute_cis(boot_stats)
+
+def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, label_idx_map=None): 
+    '''
+    This function will randomly sample with replacement 
+    from y_pred and y_true then evaluate `n` times
+    and obtain AUROC scores for each. 
+    
+    You can specify the number of samples that should be
+    used with the `n_samples` parameter. 
+    
+    Confidence intervals will be generated from each 
+    of the samples. 
+    
+    Note: 
+    * n_total_labels >= n_cxr_labels
+        `n_total_labels` is greater iff alternative labels are being tested
+    '''
+    np.random.seed(97)
+    
+    idx = np.arange(len(y_true))
+    
+    boot_stats = {name: [] for name in model_names}
+    for i in tqdm(range(n_samples)): 
+        sample = resample(idx, replace=True, random_state=i)
+        y_true_sample = y_true[sample]
+        
+        for y_pred, name in zip(y_preds, model_names):
+            y_pred_sample = y_pred[sample]
+            
+            sample_stats = evaluate(y_pred_sample, y_true_sample, cxr_labels, label_idx_map=label_idx_map)
+            boot_stats[name].append(sample_stats)
+
+    dfs = {name: pd.concat(bs) for name, bs in boot_stats.items()}
+    # cis = {name: compute_cis(bs) for name, bs in boot_stats.items()}
+    return dfs, None # , cis
+
+def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures'):
+    pathologies = df1.columns
+    num_pathologies = len(pathologies)
+    num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
+    fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(15, 20))
+    diffs = df1.to_numpy() - df2.to_numpy()
+    for idx, pathology in enumerate(pathologies):
+        row = idx // num_cols
+        col = idx % num_cols
+        pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
+        axs[row, col].hist(pathology_diffs)
+        axs[row, col].set_title(f"{pathology} mean diff: {float(pathology_diffs.mean()):.4f}")
+    fig.suptitle(f"{model1_name} - {model2_name} {metric} Paired Bootstrap")
+    save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{metric}-Paired-Bootstrap.png")
+    fig.savefig(save_path) 
+    print(f"Saving figure to {save_path}")

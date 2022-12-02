@@ -33,7 +33,7 @@ def model_zeroshot_confidence_interval(config, model_paths):
         cxr_pair_template=cxr_pair_template, 
         cache_dir=cache_dir,
         use_cxrbert=config.use_cxrbert,
-        use_biovision=config.biovision.use_biovision
+        use_biovision=config.use_biovision
     )
 
     cxr_true_labels_path = "/home/ec2-user/cheXpert-test-set-labels/groundtruth.csv"
