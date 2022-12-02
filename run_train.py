@@ -37,11 +37,7 @@ def parse_args():
     parser.add_argument('--use_biovision', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
-<<<<<<< HEAD
-    parser.add_argument('--path_list_path', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
-=======
     parser.add_argument('--img_path_list', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
->>>>>>> e63e016f8d0b9961c998af641d29bb36dbe4c035
     args = parser.parse_args()
     return args
 

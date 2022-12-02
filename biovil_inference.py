@@ -74,3 +74,4 @@ if __name__ == "__main__":
     chexzero = chexzero_transform_from_path(image_path)
     
     # print(biovil.shape, chexzero.shape) # torch.abs(biovil - chexzero).sum())
+
