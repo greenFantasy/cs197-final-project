@@ -99,7 +99,7 @@ def train(model, loader, device, criterion, optimizer, config):
         
     # login to wandb and initialize it
     wandb.login()
-    wandb.init(project="cs197-final-project", config=OmegaConf.to_container(config, resolve=True))
+    wandb.init(project="cs197-final-project", entity="team_rack", config=OmegaConf.to_container(config, resolve=True))
     
     # Run training
     total_batches = len(loader) * config.epochs
