@@ -40,10 +40,8 @@ class CXRDataset(data.Dataset):
     def __init__(self, img_path, txt_path, column='report', size=None, transform=None, use_biovision=False):
         super().__init__()
         self.use_biovision = use_biovision
-        print(f"Reaching this point 1 {self.use_biovision} {str(img_path)[:20]}")
         if size != None: 
             if not self.use_biovision:
-                print("Reaching this point 2")
                 self.img_dset = h5py.File(img_path, 'r')['cxr_unprocessed'][:size]
             else:
                 self.img_dset = pd.read_csv(img_path)['Path'].tolist()

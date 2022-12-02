@@ -390,6 +390,7 @@ class CLIP(nn.Module):
         mask.triu_(1)  # zero out the lower diagonal
         return mask
 
+    # TODO: this should still work with BioVision but flagging regardless
     @property
     def dtype(self):
         # print("Getting the dtype")
