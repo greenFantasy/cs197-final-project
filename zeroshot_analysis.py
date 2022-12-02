@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--cxr_labels', type=str, default='data/CheXpert/test_labels.csv', help="True labels for zeroshot.")
     parser.add_argument('--model_dir', type=str, default="fixed_stored_UU")
     parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--use_biovision', action='store_true')
     parser.add_argument('--results_dir', type=str, default="bootvals")
     args = parser.parse_args()
     return args
@@ -24,7 +25,6 @@ def model_zeroshot_confidence_interval(config, model_paths):
     # PRESET variables
     cxr_pair_template = ("{}", "no {}")
     cache_dir = None
-    use_cxrbert = config.use_cxrbert
     
     predictions, y_pred_avg = zero_shot.ensemble_models(
         model_paths=model_paths, 
@@ -32,7 +32,8 @@ def model_zeroshot_confidence_interval(config, model_paths):
         cxr_labels=cxr_labels, 
         cxr_pair_template=cxr_pair_template, 
         cache_dir=cache_dir,
-        use_cxrbert=use_cxrbert
+        use_cxrbert=config.use_cxrbert,
+        use_biovision=config.biovision.use_biovision
     )
 
     cxr_true_labels_path = "/home/ec2-user/cheXpert-test-set-labels/groundtruth.csv"

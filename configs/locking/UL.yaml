@@ -1,3 +1,4 @@
+# @package _global_
 cxr_filepath: 'data/cxr.h5'
 txt_filepath: 'data/mimic_impressions.csv'
 model_path: None
