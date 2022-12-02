@@ -393,12 +393,20 @@ class CLIP(nn.Module):
     # TODO: this should still work with BioVision but flagging regardless
     @property
     def dtype(self):
-        return self.visual.conv1.weight.dtype
+        # print("Getting the dtype")
+        # raise Exception("dtype doesnt exist")
+        if not self.use_biovision:
+            return self.visual.conv1.weight.dtype
+        else:
+            return self.visual.encoder.encoder.conv1.weight.dtype
 
     def encode_image(self, image):
         if self.use_cxrbert and not self.use_biovision:
             return self.visual(image.type(self.dtype)) @ self.vision_projection
-        return self.visual(image.type(self.dtype))
+        if not self.use_biovision:
+            return self.visual(image.type(self.dtype))
+        else:
+            return self.visual(image.type(self.dtype)).projected_global_embedding
 
     def encode_text(self, text):
         if not self.use_cxrbert:
@@ -470,13 +478,13 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     # filter out entries from state_dict that aren't in the model's state dict 
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
     if model.use_biovision:
-        items_to_update = {k: v for k, v in items_to_update.items() if k.startswith('visual')}
+        items_to_update = {k: v for k, v in items_to_update.items() if not k.startswith('visual')}
         if model.use_cxrbert:
             raise Exception('this function should not be called if both use_cxrbert and use_biovision are true')
         # dimensions won't line up so don't use text projection
         del items_to_update['text_projection']
     # TODO: remove after testing
-    print("items to update: ", items_to_update.keys())
+    # print("items to update: ", items_to_update.keys())
     # perform the update for the new state dict
     updated_state_dict.update(items_to_update)
     return updated_state_dict

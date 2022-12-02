@@ -104,7 +104,7 @@ def load_clip(model_path, pretrained=False, context_length=77, use_cxrbert=False
 
         model = CLIP(**params)
     else: 
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_biovision=use_biovision) 
+        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_biovision=use_biovision) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 

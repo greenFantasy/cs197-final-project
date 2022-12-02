@@ -16,6 +16,7 @@ import torch.optim as optim
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
 
 from health_multimodal.image.data.io import load_image
+from health_multimodal.image.data.transforms import create_chest_xray_transform_for_inference
 
 import sys
 sys.path.append('../..')
@@ -43,13 +44,13 @@ class CXRDataset(data.Dataset):
             if not self.use_biovision:
                 self.img_dset = h5py.File(img_path, 'r')['cxr_unprocessed'][:size]
             else:
-                self.img_dset = img_path # img_path is a list of paths
+                self.img_dset = pd.read_csv(img_path)['Path'].tolist()
             self.txt_dset = pd.read_csv(txt_path)[column][:size]
         else: 
             if not self.use_biovision:
                 self.img_dset = h5py.File(img_path, 'r')['cxr']
             else:
-                self.img_dset = img_path # img_path is a list of paths
+                self.img_dset = pd.read_csv(img_path)['Path'].tolist()
             self.txt_dset = pd.read_csv(txt_path)[column]
         self.transform = transform
             
@@ -151,7 +152,7 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     #         if i == 3:
     #             break
     
-    loader_params = {'batch_size':batch_size, 'shuffle': True, 'num_workers': 0}
+    loader_params = {'batch_size':batch_size, 'shuffle': True, 'num_workers': 4}
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
@@ -191,7 +192,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
     
     if pretrained: 
         # load clip pre-trained model
-        model, preprocess = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, 
+        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, 
                                       use_biovision=use_biovision)
         print("Loaded in pretrained model.")
     else: 
@@ -242,7 +243,7 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
     '''
     data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=config.batch_size, pretrained=config.pretrained, column=config.column)
     model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length, 
-                      use_biovision=config.use_biovision)
+                      use_biovision=config.biovision.use_biovision)
     model.to(device)
     print('Model on Device.')
 

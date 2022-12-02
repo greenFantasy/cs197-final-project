@@ -37,15 +37,21 @@ def parse_args():
     parser.add_argument('--use_biovision', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
+<<<<<<< HEAD
     parser.add_argument('--path_list_path', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
+=======
+    parser.add_argument('--img_path_list', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
+>>>>>>> e63e016f8d0b9961c998af641d29bb36dbe4c035
     args = parser.parse_args()
     return args
 
 @hydra.main(version_base=None, config_path="configs", config_name="defaults.yaml")
 def model_pipeline(config): #, verbose=0): 
+    
     print(config)
     config = config.locking
-    print([(k, v) for k, v in config.items()])
+    
+    torch.manual_seed(config.seed)
     # make the model, data, and optimization problem
     model, data_loader, device, criterion, optimizer = make(config)
 
@@ -62,16 +68,15 @@ def model_pipeline(config): #, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
-    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, 
-                      use_cxrbert=config.use_cxrbert, use_biovision=config.use_biovision)
+    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert, use_biovision=config.biovision.use_biovision)
     model.to(device)
     print('Model on Device.')
 
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
-    if config.use_cxrbert and not config.use_biovision:
+    if config.use_cxrbert and not config.biovision.use_biovision:
         params_list.append(model.vision_projection)
     if not config.use_cxrbert:
         params_list.append(model.text_projection)
