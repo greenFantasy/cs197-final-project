@@ -286,16 +286,16 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
         row = idx // num_cols
         col = idx % num_cols
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
-        mean, lower, upper = mean_confidence_interval(pathology_diffs, confidence=0.95)
+        lower = np.nanquantile(pathology_diffs, 0.025)
+        upper = np.nanquantile(pathology_diffs, 0.975)
         perc = (pathology_diffs > 0).sum() / len(pathology_diffs) * 100
         avg = pathology_diffs.mean()
-        threshold = 25
-        if threshold < perc < 100 - threshold:
+        if lower < 0 < upper:
             color = "orange"
-        elif perc <= threshold:
-            color = "red"
-        else:
+        elif 0 <= lower:
             color = "green"
+        else:
+            color = "red"
         
         sns.distplot(pathology_diffs, ax=axs[row, col], color=color)
         title = f"{pathology[:-4]} AUC"
