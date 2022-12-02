@@ -3,6 +3,7 @@ checkpoints/*
 data/*
 !data/README.md
 .hydra/
+cxr_data/*
 
 .DS_Store
 
