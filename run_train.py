@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
     parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--use_biovision', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
     parser.add_argument('--path_list_path', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
@@ -61,17 +62,18 @@ def model_pipeline(config): #, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
-    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
+    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, 
+                      use_cxrbert=config.use_cxrbert, use_biovision=config.use_biovision)
     model.to(device)
     print('Model on Device.')
 
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
-    if config.use_cxrbert:
+    if config.use_cxrbert and not config.use_biovision:
         params_list.append(model.vision_projection)
-    else:
+    if not config.use_cxrbert:
         params_list.append(model.text_projection)
     if not config.lock_text:
         params_list.append(model.transformer.parameters())
@@ -81,13 +83,25 @@ def make(config):
     if not config.lock_vision:
         params_list.append(model.visual.parameters())
     params_list = [{params_key: param} for param in params_list]
-        
+
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
     if config.optimizer == "adam": 
         optimizer = optim.AdamW(params_list, lr=config.lr)
     elif config.optimizer == "sgd": 
         optimizer = optim.SGD(params_list, lr=config.lr, momentum=config.momentum)
+
+    # turn off gradient computation for frozen weights
+    if config.lock_text:
+        for param in model.transformer.parameters():
+            param.requires_grad = False
+        if not config.use_cxrbert:
+            for param in model.token_embedding.parameters():
+                param.requires_grad = False
+            model.positional_embedding.requires_grad = False
+    if config.lock_vision:
+        for param in model.visual.parameters():
+            param.requires_grad = False
     return model, data_loader, device, criterion, optimizer
 
 def train(model, loader, device, criterion, optimizer, config): 
