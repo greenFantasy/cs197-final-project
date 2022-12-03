@@ -1,5 +1,6 @@
-cxr_filepath: '../CheXzero/data/cxr.h5'
-txt_filepath: '../CheXzero/data/mimic_impressions.csv'
+# @package _global_
+cxr_filepath: 'data/cxr.h5'
+txt_filepath: '/data/mimic_impressions.csv'
 model_path: None
 batch_size: 16
 epochs: 3
