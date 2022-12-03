@@ -5,6 +5,8 @@ data/*
 .hydra/
 cxr_data/*
 
+temp.py
+
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
