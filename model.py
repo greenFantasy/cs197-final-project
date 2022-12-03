@@ -33,6 +33,10 @@ from transformers import AutoModel, AutoTokenizer
 from biovil_inference import get_biovil_resnet as BioVision
 
 
+HUGGING_FACE_BERT_URLS = {"cxr": "microsoft/BiomedVLP-CXR-BERT-specialized", 
+                          "blue": "bionlp/bluebert_pubmed_uncased_L-12_H-768_A-12d",
+                          "clinical": "emilyalsentzer/Bio_ClinicalBERT"}
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -226,12 +230,15 @@ class Transformer(nn.Module):
         return self.resblocks(x)
 
 
-class CXRBERT(nn.Module):
-    def __init__(self) -> None:
+class HUGGINGFACE_BERT(nn.Module):
+    def __init__(self, key="blue") -> None:
         super().__init__()
-        model_url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-        cxr_bert = AutoModel.from_pretrained(model_url, trust_remote_code=True, revision='main')
-        self.model = cxr_bert
+        if key not in HUGGING_FACE_BERT_URLS.keys():
+            raise ValueError(f"Key is invalid: {key}")
+        model_url = HUGGING_FACE_BERT_URLS[key]
+        self.url = model_url
+        bert = AutoModel.from_pretrained(model_url, trust_remote_code=True, revision='main')
+        self.model = bert
         self.width = 128
 
     def forward(self, x: torch.Tensor):
@@ -292,13 +299,15 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_cxrbert: bool,
-                 use_biovision: bool
+                 use_huggingface_bert: bool,
+                 use_biovision: bool,
+                 huggingface_bert_key: str= "cxr",
                  ):
         super().__init__()
 
         self.context_length = context_length
-        self.use_cxrbert = use_cxrbert
+        self.use_huggingface_bert = use_huggingface_bert
+        self.huggingface_bert_key = huggingface_bert_key
         self.use_biovision = use_biovision
 
         if self.use_biovision:
@@ -323,7 +332,7 @@ class CLIP(nn.Module):
                 output_dim=embed_dim
             )
 
-        if not self.use_cxrbert:
+        if not self.use_huggingface_bert:
             self.transformer = Transformer(
                 width=transformer_width,
                 layers=transformer_layers,
@@ -335,8 +344,9 @@ class CLIP(nn.Module):
             else:
                 self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         else:
-            self.transformer = CXRBERT()
-            url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+            self.transformer = HUGGINGFACE_BERT(key = self.huggingface_bert_key)
+            url = self.transformer.url
+            print(f"Loading Tokenizer from the following Hugging Face Index: {url}")
             self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
             
             # vision project head init
@@ -369,7 +379,7 @@ class CLIP(nn.Module):
                     if name.endswith("bn3.weight"):
                         nn.init.zeros_(param)
 
-        if not self.use_cxrbert:
+        if not self.use_huggingface_bert:
             proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
             attn_std = self.transformer.width ** -0.5
             fc_std = (2 * self.transformer.width) ** -0.5
@@ -401,7 +411,7 @@ class CLIP(nn.Module):
             return self.visual.encoder.encoder.conv1.weight.dtype
 
     def encode_image(self, image):
-        if self.use_cxrbert and not self.use_biovision:
+        if self.use_huggingface_bert and not self.use_biovision:
             return self.visual(image.type(self.dtype)) @ self.vision_projection
         if not self.use_biovision:
             return self.visual(image.type(self.dtype))
@@ -409,7 +419,7 @@ class CLIP(nn.Module):
             return self.visual(image.type(self.dtype)).projected_global_embedding
 
     def encode_text(self, text):
-        if not self.use_cxrbert:
+        if not self.use_huggingface_bert:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
             x = x + self.positional_embedding.type(self.dtype)
@@ -479,8 +489,8 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
     if model.use_biovision:
         items_to_update = {k: v for k, v in items_to_update.items() if not k.startswith('visual')}
-        if model.use_cxrbert:
-            raise Exception('this function should not be called if both use_cxrbert and use_biovision are true')
+        if model.use_huggingface_bert:
+            raise Exception('this function should not be called if both use_huggingface_bert and use_biovision are true')
         # dimensions won't line up so don't use text projection
         del items_to_update['text_projection']
     # TODO: remove after testing
@@ -490,7 +500,7 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     return updated_state_dict
 
 
-def build_model(state_dict: dict, use_cxrbert=False, use_biovision=False):
+def build_model(state_dict: dict, use_huggingface_bert=False, use_biovision=False):
 
     vit = "visual.proj" in state_dict
 
@@ -520,18 +530,18 @@ def build_model(state_dict: dict, use_cxrbert=False, use_biovision=False):
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_cxrbert, use_biovision
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_huggingface_bert, use_biovision
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:
         if key in state_dict:
             del state_dict[key]
 
-    if not model.use_cxrbert:
+    if not model.use_huggingface_bert:
         convert_weights(model)
 
     # only update if we're not doing full BioViL
-    if not (use_biovision and use_cxrbert):
+    if not (use_biovision and use_huggingface_bert):
         updated_state_dict = update_state_dict(state_dict, model)
         model.load_state_dict(updated_state_dict)
 

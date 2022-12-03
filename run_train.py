@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--context_length', type=int, default=77)
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
-    parser.add_argument('--use_cxrbert', action='store_true')
+    parser.add_argument('--use_huggingface_bert', action='store_true')
     parser.add_argument('--use_biovision', action='store_true')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
@@ -65,20 +65,20 @@ def model_pipeline(config): #, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert, use_biovision=config.biovision.use_biovision)
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_huggingface_bert=config.use_huggingface_bert, use_biovision=config.biovision.use_biovision)
     model.to(device)
     print('Model on Device.')
 
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
-    if config.use_cxrbert and not config.biovision.use_biovision:
+    if config.use_huggingface_bert and not config.biovision.use_biovision:
         params_list.append(model.vision_projection)
-    if not config.use_cxrbert:
+    if not config.use_huggingface_bert:
         params_list.append(model.text_projection)
     if not config.lock_text:
         params_list.append(model.transformer.parameters())
-        if not config.use_cxrbert:
+        if not config.use_huggingface_bert:
             params_list.append(model.token_embedding.parameters())
             params_list.append(model.positional_embedding)
     if not config.lock_vision:
@@ -96,7 +96,7 @@ def make(config):
     if config.lock_text:
         for param in model.transformer.parameters():
             param.requires_grad = False
-        if not config.use_cxrbert:
+        if not config.use_huggingface_bert:
             for param in model.token_embedding.parameters():
                 param.requires_grad = False
             model.positional_embedding.requires_grad = False
