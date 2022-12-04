@@ -96,9 +96,9 @@ def get_biovil_transform():
     return biovil_transform
 
 class DefaultBiovisionConfig:
-    def __init__(self):
-        self.use_biovision = False
-        self.img_path_list = None
+    def __init__(self, use_biovision=False, img_path_list=None):
+        self.use_biovision = use_biovision
+        self.img_path_list = img_path_list
 
 def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrained=False, verbose=False, biovision_config=DefaultBiovisionConfig()): 
     if torch.cuda.is_available():  

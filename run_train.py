@@ -63,7 +63,7 @@ def model_pipeline(config): #, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
-    config.biovision = DefaultBiovisionConfig()
+    config.biovision = DefaultBiovisionConfig(use_biovision=config.image_tower_type=="biovision", img_path_list=config.img_path_list)
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, 
                                     pretrained=pretrained, column="impression", biovision_config=config.biovision)
     model = load_clip(config.image_tower_type, model_path=None, pretrained=pretrained, context_length=config.context_length, 
