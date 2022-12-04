@@ -120,8 +120,8 @@ def train(model, loader, device, criterion, optimizer, config):
     wandb_config_args = ["lr", "epochs", "batch_size", "momentum", "seed", "optimizer", "lock_text", "lock_vision", 
                          "use_huggingface_bert", "image_tower_type", "huggingface_bert_key"]
     wandb.login()
-    wandb.init(name=config.model_name, project="cs197-final-project", entity="team_rack")
-    wandb.config={key: vars(config)[key] for key in wandb_config_args}
+    wandb.init(name=config.model_name, project="cs197-final-project", entity="team_rack", 
+               config={key: vars(config)[key] for key in wandb_config_args})
 
     # Run training
     total_batches = len(loader) * config.epochs
