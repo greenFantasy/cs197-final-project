@@ -15,13 +15,13 @@ def parse_args():
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
     parser.add_argument('--txt_filepath', type=str, default='data/mimic_impressions.csv', help="Directory to load radiology report impressions text from.")
     parser.add_argument('--model_path', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--save_interval', type=int, default=500)
+    parser.add_argument('--save_interval', type=int, default=1000)
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--save_dir', type=str, default="checkpoints/", help="Directory to save the trained model.")
-    parser.add_argument('--seed', type=int, default=124)
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--optimizer', type=str, default="sgd")
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--context_length', type=int, default=77)
@@ -42,7 +42,8 @@ def model_pipeline(config): #, verbose=0):
     print(config, flush=True)
     # config = config.locking
     
-    torch.manual_seed(config.seed)
+    if config.seed != 0:
+        torch.manual_seed(config.seed)
     # make the model, data, and optimization problem
     model, data_loader, device, criterion, optimizer = make(config)
     
