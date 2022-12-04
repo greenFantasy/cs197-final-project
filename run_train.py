@@ -65,7 +65,7 @@ def model_pipeline(config): #, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert, use_biovision=config.biovision.use_biovision)
+    model = load_clip(config.image_tower_type, model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert)
     model.to(device)
     print('Model on Device.')
 

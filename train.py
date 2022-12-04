@@ -156,7 +156,7 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=False, use_biovision=False):
+def load_clip(image_tower_type, model_path=None, pretrained=False, context_length=77, use_cxrbert=False):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -192,8 +192,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
     
     if pretrained: 
         # load clip pre-trained model
-        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, 
-                                      use_biovision=use_biovision)
+        model, _ = clip.load("RN50", image_tower_type, device=device, jit=False, use_cxrbert=use_cxrbert)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -252,33 +251,3 @@ def make(config, cxr_filepath, txt_filepath, model_path=None):
     # todo: incorporate - torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, verbose=False)
     optimizer = optim.AdamW(model.parameters(), lr=config.lr)
     return model, data_loader, device, criterion, optimizer
-
-# TODO: this function is unused so didn't modify but flagging anyway
-def train_main(cxr_filepath, txt_filepath, hyperparams, output_path, model_path=None, pretrained=False): 
-    '''
-    args: 
-        * cxr_filpath- str filepath to cxr images
-        * txt_filepath- str filepath to text reports
-        * hyperparams- dictionary with the following hyperparams:
-        `batch_size`, `criterion`, `learning_rate`, `momentum`, `epochs`
-        * output_path- str filepath to where the trained model will be saved
-        * model_path- str filepath to model that will be used as baseline model for training. 
-        If not provided, a model will be trained from scratch
-        * pretrained- whether or not the clip model was pretrained with generic images 
-    This function is the main train function for CXR-CLIP. 
-    '''
-    
-    # unpack `hyperparams`
-    batch_size = hyperparams['batch_size']
-    criterion = hyperparams['criterion']
-    learning_rate = hyperparams['learning_rate']
-    momentum = hyperparams['momentum']
-    epochs = hyperparams['epochs']
-    
-    # load input cxr + report data
-    data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=batch_size, pretrained=pretrained)
-    model = load_clip(model_path=model_path, pretrained=pretrained)
-    
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
-    train_clip(model, data_loader, device, criterion, optimizer, epochs, output_path)
-    return model
