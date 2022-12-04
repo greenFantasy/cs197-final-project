@@ -1,16 +1,10 @@
-print("Opening file")
-
 import os
 import argparse
 from tqdm import tqdm
 
-print("Imported simple libaries")
-
 import torch
 from torch import nn
 import torch.optim as optim
-
-print("Imported torch libaries")
 
 from train import load_data, load_clip, preprocess_text, DefaultBiovisionConfig
 
@@ -81,17 +75,17 @@ def make(config):
     # this should always exist now with modifications to bert-based text stacks
     params_list.append(model.text_projection)
     if not config.lock_text:
-        params_list.append(model.transformer.parameters())
+        params_list.extend(model.transformer.parameters())
         if not config.use_huggingface_bert:
-            params_list.append(model.token_embedding.parameters())
-            params_list.append(model.ln_final.parameters())
+            params_list.extend(model.token_embedding.parameters())
+            params_list.extend(model.ln_final.parameters())
             params_list.append(model.positional_embedding)
     # if locked, only add projection; otherwise add everything
     if config.lock_vision:
-        params_list.append(model.visual.projection.parameters())
+        params_list.extend(model.visual.projector.parameters())
     else:
-        params_list.append(model.visual.parameters())
-    params_list = [{params_key: param} for param in params_list]
+        params_list.extend(model.visual.parameters())
+    # params_list = [{params_key: param} for param in params_list]
 
     # turn off gradient computation for frozen weights
     if config.lock_text:
@@ -131,8 +125,8 @@ def train(model, loader, device, criterion, optimizer, config):
         running_loss = 0.0 # running loss over batch
         for data in tqdm(loader):
             # get the images
-            images = data['img'].float()
-
+            images = data['img']
+            
             texts = data['txt']
             texts = preprocess_text(texts, model) 
             
