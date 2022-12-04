@@ -156,7 +156,8 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(image_tower_type, model_path=None, pretrained=False, context_length=77, use_cxrbert=False):
+def load_clip(image_tower_type, model_path=None, pretrained=False, context_length=77, use_huggingface_bert=False, 
+              huggingface_bert_key='cxr'):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -183,8 +184,8 @@ def load_clip(image_tower_type, model_path=None, pretrained=False, context_lengt
         'transformer_width': 512,
         'transformer_heads': 8,
         'transformer_layers': 12,
-        'use_cxrbert': use_cxrbert,
-        'use_biovision': use_biovision
+        'use_huggingface_bert': use_huggingface_bert,
+        'huggingface_bert_key': huggingface_bert_key
     }
     
     # set device 
@@ -192,7 +193,8 @@ def load_clip(image_tower_type, model_path=None, pretrained=False, context_lengt
     
     if pretrained: 
         # load clip pre-trained model
-        model, _ = clip.load("RN50", image_tower_type, device=device, jit=False, use_cxrbert=use_cxrbert)
+        model, _ = clip.load("RN50", image_tower_type, device=device, jit=False, use_huggingface_bert=use_huggingface_bert, 
+                             huggingface_bert_key=huggingface_bert_key)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)
@@ -205,49 +207,46 @@ def load_clip(image_tower_type, model_path=None, pretrained=False, context_lengt
     
     
 def preprocess_text(texts, model):
-    if not model.use_cxrbert:
-        if model.context_length is None: 
-            model = model.module
-            
-        _tokenizer = SimpleTokenizer()
-        sot_token = _tokenizer.encoder["<|startoftext|>"]
-        eot_token = _tokenizer.encoder["<|endoftext|>"]
-        all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
-        result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
-        
-        for i, tokens in enumerate(all_tokens):
-            if len(tokens) > model.context_length:
-                tokens = tokens[:model.context_length]
-                tokens[model.context_length - 1] = eot_token
-            result[i, :len(tokens)] = torch.tensor(tokens)
-        return result
-    else:
-        
-        return model.tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
-                                                add_special_tokens=True,
-                                                padding='longest',
-                                                return_tensors='pt')
+    # use specific tokenizer associated with each HuggingFace model
+    if model.use_huggingface_bert:
+        return model.tokenizer(text=texts, add_special_tokens=True, padding='longest', return_tensors='pt')
 
-def make(config, cxr_filepath, txt_filepath, model_path=None): 
-    '''
-    FUNCTION: make
-    ---------------------------------
-    This function makes the model, the data loader, loss and optimizer. 
+    if model.context_length is None: 
+        model = model.module
+
+    _tokenizer = SimpleTokenizer()
+    sot_token = _tokenizer.encoder["<|startoftext|>"]
+    eot_token = _tokenizer.encoder["<|endoftext|>"]
+    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+    result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
     
-    args: 
-        * config - dict, configuration of experiment
-        * cxr_filepath - string, filepath to chest x-ray images
-        * txt_filepath - string, filepath to corresponding text reports
-        * model_path - string, filepath to previously trained model
-    '''
-    data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=config.batch_size, pretrained=config.pretrained, column=config.column)
-    model = load_clip(model_path=model_path, pretrained=config.pretrained, context_length=config.context_length, 
-                      use_biovision=config.biovision.use_biovision)
-    model.to(device)
-    print('Model on Device.')
+    for i, tokens in enumerate(all_tokens):
+        if len(tokens) > model.context_length:
+            tokens = tokens[:model.context_length]
+            tokens[model.context_length - 1] = eot_token
+        result[i, :len(tokens)] = torch.tensor(tokens)
+    return result
 
-    # make the optimizer 
-    criterion = nn.CrossEntropyLoss().cuda()
-    # todo: incorporate - torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, verbose=False)
-    optimizer = optim.AdamW(model.parameters(), lr=config.lr)
-    return model, data_loader, device, criterion, optimizer
+# def make(config, cxr_filepath, txt_filepath, model_path=None): 
+#     '''
+#     FUNCTION: make
+#     ---------------------------------
+#     This function makes the model, the data loader, loss and optimizer. 
+    
+#     args: 
+#         * config - dict, configuration of experiment
+#         * cxr_filepath - string, filepath to chest x-ray images
+#         * txt_filepath - string, filepath to corresponding text reports
+#         * model_path - string, filepath to previously trained model
+#     '''
+#     data_loader, device = load_data(cxr_filepath, txt_filepath, batch_size=config.batch_size, pretrained=config.pretrained, column=config.column)
+#     model = load_clip(config.image_tower_type, model_path=model_path, pretrained=config.pretrained, context_length=config.context_length, 
+#                     )
+#     model.to(device)
+#     print('Model on Device.')
+
+#     # make the optimizer 
+#     criterion = nn.CrossEntropyLoss().cuda()
+#     # todo: incorporate - torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, verbose=False)
+#     optimizer = optim.AdamW(model.parameters(), lr=config.lr)
+#     return model, data_loader, device, criterion, optimizer

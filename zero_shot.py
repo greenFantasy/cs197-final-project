@@ -25,7 +25,7 @@ from sklearn.metrics import precision_recall_curve, f1_score
 from sklearn.metrics import average_precision_score
 
 import clip
-from model import CLIP
+from model import CLIP, HUGGING_FACE_BERT_URLS
 from eval import evaluate, plot_roc, accuracy, sigmoid, bootstrap, compute_cis
 
 CXR_FILEPATH = '../../project-files/data/test_cxr.h5'
@@ -79,7 +79,8 @@ class CXRTestDataset(data.Dataset):
     
         return sample
 
-def load_clip(model_path, pretrained=False, context_length=77, use_cxrbert=False, use_biovision=False): 
+def load_clip(model_path, pretrained=False, context_length=77, use_huggingface_bert=False, use_biovision=False, 
+              huggingface_bert_key='cxr'): 
     """
     FUNCTION: load_clip
     ---------------------------------
@@ -98,13 +99,15 @@ def load_clip(model_path, pretrained=False, context_length=77, use_cxrbert=False
             'transformer_width': 512,
             'transformer_heads': 8,
             'transformer_layers': 12,
-            'use_cxrbert': use_cxrbert,
-            'use_biovision': use_biovision
+            'use_huggingface_bert': use_huggingface_bert,
+            'use_biovision': use_biovision,
+            'huggingface_bert_key': huggingface_bert_key
         }
 
         model = CLIP(**params)
     else: 
-        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, use_biovision=use_biovision) 
+        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_huggingface_bert=use_huggingface_bert, 
+                             use_biovision=use_biovision, huggingface_bert_key=huggingface_bert_key) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 
@@ -112,7 +115,8 @@ def load_clip(model_path, pretrained=False, context_length=77, use_cxrbert=False
         raise
     return model
 
-def zeroshot_classifier(classnames, templates, model, context_length=77, use_cxrbert=False):
+def zeroshot_classifier(classnames, templates, model, context_length=77, use_huggingface_bert=False, 
+                        huggingface_bert_key='cxr'):
     """
     FUNCTION: zeroshot_classifier
     -------------------------------------
@@ -127,19 +131,19 @@ def zeroshot_classifier(classnames, templates, model, context_length=77, use_cxr
     
     Returns PyTorch Tensor, output of the text encoder given templates. 
     """
+    if use_huggingface_bert:
+        url = HUGGING_FACE_BERT_URLS[huggingface_bert_key]
+        print(f"Loading Tokenizer from the following Hugging Face Index: {url}")
+        tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True)
+
     with torch.no_grad():
         zeroshot_weights = []
         # compute embedding through model for each class
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates] # format with class
             
-            if use_cxrbert:
-                url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-                tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
-                texts = tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
-                                                        add_special_tokens=True,
-                                                        padding='longest',
-                                                        return_tensors='pt')
+            if use_huggingface_bert:
+                texts = tokenizer(text=texts, add_special_tokens=True, padding='longest', return_tensors='pt')
             else:
                 texts = clip.tokenize(texts, context_length=context_length) # tokenize
             class_embeddings = model.encode_text(texts) # embed with text encoder
@@ -207,7 +211,8 @@ def predict(loader, model, zeroshot_weights, softmax_eval=True, verbose=0):
     y_pred = np.array(y_pred)
     return np.array(y_pred)
 
-def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True, context_length=77, use_cxrbert=False): 
+def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True, context_length=77, use_huggingface_bert=False, 
+                          huggingface_bert_key='cxr'): 
     """
     FUNCTION: run_single_prediction
     --------------------------------------
@@ -225,7 +230,9 @@ def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True
     Returns list, predictions from the given template. 
     """
     cxr_phrase = [template]
-    zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length, use_cxrbert=use_cxrbert)
+    zeroshot_weights = zeroshot_classifier(cxr_labels, cxr_phrase, model, context_length=context_length, 
+                                           use_huggingface_bert=use_huggingface_bert, 
+                                           huggingface_bert_key=huggingface_bert_key)
     y_pred = predict(loader, model, zeroshot_weights, softmax_eval=softmax_eval)
     return y_pred
 
@@ -273,7 +280,8 @@ def process_alt_labels(alt_labels_dict, cxr_labels):
     
     return alt_label_list, alt_label_idx_map 
 
-def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, context_length: int = 77, use_cxrbert=False): 
+def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, context_length: int = 77, use_huggingface_bert=False, 
+                     huggingface_bert_key='cxr'): 
     """
     Run softmax evaluation to obtain a single prediction from the model.
     """
@@ -283,9 +291,13 @@ def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, con
 
     # get pos and neg predictions, (num_samples, num_classes)
     pos_pred = run_single_prediction(eval_labels, pos, model, loader, 
-                                     softmax_eval=True, context_length=context_length, use_cxrbert=use_cxrbert) 
+                                     softmax_eval=True, context_length=context_length, 
+                                     use_huggingface_bert=use_huggingface_bert, 
+                                     huggingface_bert_key=huggingface_bert_key) 
     neg_pred = run_single_prediction(eval_labels, neg, model, loader, 
-                                     softmax_eval=True, context_length=context_length, use_cxrbert=use_cxrbert) 
+                                     softmax_eval=True, context_length=context_length, 
+                                     use_huggingface_bert=use_huggingface_bert, 
+                                     huggingface_bert_key=huggingface_bert_key) 
 
     # compute probabilities with softmax
     sum_pred = np.exp(pos_pred) + np.exp(neg_pred)
@@ -392,8 +404,9 @@ def make(
     cxr_filepath: str, 
     pretrained: bool = True, 
     context_length: bool = 77, 
-    use_cxrbert=False,
+    use_huggingface_bert=False,
     use_biovision=False,
+    huggingface_bert_key='cxr',
     image_csv_path=None,
 ):
     """
@@ -417,8 +430,9 @@ def make(
         model_path=model_path, 
         pretrained=pretrained, 
         context_length=context_length,
-        use_cxrbert=use_cxrbert,
+        use_huggingface_bert=use_huggingface_bert,
         use_biovision=use_biovision,
+        huggingface_bert_key=huggingface_bert_key
     )
 
     if not use_biovision:
@@ -455,8 +469,9 @@ def ensemble_models(
     cxr_pair_template: Tuple[str], 
     cache_dir: str = None, 
     save_name: str = None,
-    use_cxrbert: bool = False,
+    use_huggingface_bert: bool = False,
     use_biovision: bool = False,
+    huggingface_bert_key: str = 'cxr',
     image_csv_path = None
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
     """
@@ -476,8 +491,9 @@ def ensemble_models(
         model, loader = make(
             model_path=path, 
             cxr_filepath=cxr_filepath, 
-            use_cxrbert=use_cxrbert,
+            use_huggingface_bert=use_huggingface_bert,
             use_biovision=use_biovision,
+            huggingface_bert_key=huggingface_bert_key,
             image_csv_path=image_csv_path
         ) 
         
@@ -494,7 +510,8 @@ def ensemble_models(
             y_pred = np.load(cache_path)
         else: # cached prediction not found, compute preds
             print("Inferring model {}".format(path))
-            y_pred = run_softmax_eval(model, loader, cxr_labels, cxr_pair_template, use_cxrbert=use_cxrbert)
+            y_pred = run_softmax_eval(model, loader, cxr_labels, cxr_pair_template, use_huggingface_bert=use_huggingface_bert, 
+                                      huggingface_bert_key=huggingface_bert_key)
             if cache_dir is not None: 
                 Path(cache_dir).mkdir(exist_ok=True, parents=True)
                 np.save(file=cache_path, arr=y_pred)
@@ -507,7 +524,7 @@ def ensemble_models(
 
 def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_label_path, alt_labels_dict: dict = None, 
                   softmax_eval = True, context_length=77, pretrained: bool = False, use_bootstrap=True, cutlabels=True, 
-                  use_cxrbert=False, use_biovision=False): 
+                  use_huggingface_bert=False, use_biovision=False, huggingface_bert_key='cxr'): 
     """
     FUNCTION: run_zero_shot
     --------------------------------------
@@ -543,8 +560,9 @@ def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_lab
         cxr_filepath=cxr_filepath, 
         pretrained=pretrained,
         context_length=context_length,
-        use_cxrbert=use_cxrbert,
-        use_biovision=use_biovision
+        use_huggingface_bert=use_huggingface_bert,
+        use_biovision=use_biovision,
+        huggingface_bert_key=huggingface_bert_key
     )
 
     y_true = make_true_labels(
@@ -558,7 +576,7 @@ def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_lab
                              alt_labels_dict=alt_labels_dict, softmax_eval=softmax_eval, context_length=context_length, use_bootstrap=use_bootstrap)
     return results, y_pred
 
-# TODO: didn't add use_cxrbert or use_biovision flags because this function's not being used
+# TODO: didn't add use_huggingface_bert or use_biovision flags because this function's not being used
 def run_cxr_zero_shot(model_path, context_length=77, pretrained=False): 
     """
     FUNCTION: run_cxr_zero_shot
@@ -593,7 +611,7 @@ def run_cxr_zero_shot(model_path, context_length=77, pretrained=False):
     
     return cxr_labels, cxr_results[0]
 
-# TODO: didn't add use_cxrbert or use_biovision flags because this function's not being used
+# TODO: didn't add use_huggingface_bert or use_biovision flags because this function's not being used
 def validation_zero_shot(model_path, context_length=77, pretrained=False): 
     """
     FUNCTION: validation_zero_shot

@@ -34,6 +34,11 @@ from transformers import AutoModel, AutoTokenizer
 
 import visionmodels
 
+HUGGING_FACE_BERT_URLS = {"cxr": "microsoft/BiomedVLP-CXR-BERT-specialized", 
+                          "blue": "bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12",
+                          "clinical": "emilyalsentzer/Bio_ClinicalBERT"}
+HUGGING_FACE_BERT_WIDTHS = {"cxr": 768, "blue": 768, "clinical": 768}
+
 EMBED_DIM = 128
 
 @enum.unique
@@ -242,17 +247,21 @@ class Transformer(nn.Module):
         return self.resblocks(x)
 
 
-class CXRBERT(nn.Module):
-    def __init__(self) -> None:
+class HUGGINGFACE_BERT(nn.Module):
+    def __init__(self, key="cxr") -> None:
         super().__init__()
-        model_url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-        cxr_bert = AutoModel.from_pretrained(model_url, trust_remote_code=True, revision='main')
-        self.model = cxr_bert
-        self.width = EMBED_DIM
+        if key not in HUGGING_FACE_BERT_URLS:
+            raise ValueError(f"Key is invalid: {key}")
+        self.key = key
+        self.model_url = HUGGING_FACE_BERT_URLS[self.key]
+        self.model = AutoModel.from_pretrained(self.model_url, trust_remote_code=True)
+        self.width = HUGGING_FACE_BERT_WIDTHS[self.key]
 
-    def forward(self, x: torch.Tensor):
-        output = self.model(x)
-        return output
+    def forward(self, input_ids, attention_mask):
+        # the CXRBERT class will have a different output, but the code will still be compatiable
+        # because it will still have a hidden_states key which is all we care about right now
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, 
+                          output_hidden_states=True, return_dict=True)
 
 
 class VisualTransformer(nn.Module):
@@ -291,6 +300,7 @@ class VisualTransformer(nn.Module):
 
         return x
 
+
 class CLIP(nn.Module):
     def __init__(self,
                  embed_dim: int,
@@ -302,33 +312,36 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 use_cxrbert: bool,
+                 use_huggingface_bert: bool,
+                 huggingface_bert_key: str = "cxr",
                  ):
         super().__init__()
 
         self.context_length = context_length
-        self.use_cxrbert = use_cxrbert
+        self.use_huggingface_bert = use_huggingface_bert
+        self.huggingface_bert_key = huggingface_bert_key
 
         if image_tower_type in image_tower_loader_dict:
             self.visual = image_tower_loader_dict[image_tower_type]()
         else:
             raise ValueError(f"Invalid Image Tower Type Specified: {image_tower_type} not found")
 
-        if not self.use_cxrbert:
+        if not self.use_huggingface_bert:
             self.transformer = Transformer(
                 width=transformer_width,
                 layers=transformer_layers,
                 heads=transformer_heads,
                 attn_mask=self.build_attention_mask()
             )
-            if self.use_biovision:
-                self.text_projection = nn.Parameter(torch.empty(transformer_width, EMBED_DIM))
-            else:
-                self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
+
         else:
-            self.transformer = CXRBERT()
-            url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+            self.transformer = HUGGINGFACE_BERT(key = self.huggingface_bert_key)
+            url = self.transformer.model_url
+            print(f"Loading Tokenizer from the following Hugging Face Index: {url}")
+            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True)
+            transformer_width = self.transformer.width
+        
+        self.text_projection = nn.Parameter(torch.empty(transformer_width, EMBED_DIM))
 
         self.vocab_size = vocab_size
         self.token_embedding = nn.Embedding(vocab_size, transformer_width)
@@ -339,94 +352,67 @@ class CLIP(nn.Module):
 
         self.initialize_parameters()
     
-    def __init__(self, 
-                 embed_dim,
-                 # visual
-                 image_resolution: int,
-                 vision_layers: Union[Tuple[int, int, int, int], int],
-                 vision_width: int,
+    # def __init__(self, 
+    #              embed_dim,
+    #              # visual
+    #              image_resolution: int,
+    #              vision_layers: Union[Tuple[int, int, int, int], int],
+    #              vision_width: int,
                  
-                 # text
-                 context_length: int,
-                 vocab_size: int,
-                 transformer_width: int,
-                 transformer_heads: int,
-                 transformer_layers: int,
-                 use_cxrbert: bool,
-                 # visual defaults
-                 vision_patch_size: int = None
-                 ):
+    #              # text
+    #              context_length: int,
+    #              vocab_size: int,
+    #              transformer_width: int,
+    #              transformer_heads: int,
+    #              transformer_layers: int,
+    #              use_cxrbert: bool,
+    #              # visual defaults
+    #              vision_patch_size: int = None
+    #              ):
 
-        self.context_length = context_length
-        self.use_cxrbert = use_cxrbert
+    #     self.context_length = context_length
+    #     self.use_cxrbert = use_cxrbert
         
-        if isinstance(vision_layers, (tuple, list)):
-            print("Constructing vision Resnet manually instead of pre-trained CLIP")
-            vision_heads = vision_width * 32 // 64
-            self.visual = ModifiedResNet(
-                layers=vision_layers,
-                output_dim=embed_dim,
-                heads=vision_heads,
-                input_resolution=image_resolution,
-                width=vision_width
-            )
-        else:
-            raise ValueError("Codebase no longer supports ViTs on image side.")
+    #     if isinstance(vision_layers, (tuple, list)):
+    #         print("Constructing vision Resnet manually instead of pre-trained CLIP")
+    #         vision_heads = vision_width * 32 // 64
+    #         self.visual = ModifiedResNet(
+    #             layers=vision_layers,
+    #             output_dim=embed_dim,
+    #             heads=vision_heads,
+    #             input_resolution=image_resolution,
+    #             width=vision_width
+    #         )
+    #     else:
+    #         raise ValueError("Codebase no longer supports ViTs on image side.")
 
-        if not self.use_cxrbert:
-            self.transformer = Transformer(
-                width=transformer_width,
-                layers=transformer_layers,
-                heads=transformer_heads,
-                attn_mask=self.build_attention_mask()
-            )
-            if self.use_biovision:
-                self.text_projection = nn.Parameter(torch.empty(transformer_width, EMBED_DIM))
-            else:
-                self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
-        else:
-            self.transformer = CXRBERT()
-            url = "microsoft/BiomedVLP-CXR-BERT-specialized"
-            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
+    #     if not self.use_cxrbert:
+    #         self.transformer = Transformer(
+    #             width=transformer_width,
+    #             layers=transformer_layers,
+    #             heads=transformer_heads,
+    #             attn_mask=self.build_attention_mask()
+    #         )
+    #         if self.use_biovision:
+    #             self.text_projection = nn.Parameter(torch.empty(transformer_width, EMBED_DIM))
+    #         else:
+    #             self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
+    #     else:
+    #         self.transformer = CXRBERT()
+    #         url = "microsoft/BiomedVLP-CXR-BERT-specialized"
+    #         self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
 
-        self.vocab_size = vocab_size
-        self.token_embedding = nn.Embedding(vocab_size, transformer_width)
-        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
-        self.ln_final = LayerNorm(transformer_width)
+    #     self.vocab_size = vocab_size
+    #     self.token_embedding = nn.Embedding(vocab_size, transformer_width)
+    #     self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
+    #     self.ln_final = LayerNorm(transformer_width)
 
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+    #     self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
-        self.initialize_parameters()
+    #     self.initialize_parameters()
 
     def initialize_parameters(self):
-        nn.init.normal_(self.token_embedding.weight, std=0.02)
-        nn.init.normal_(self.positional_embedding, std=0.01)
-
-        if not self.use_biovision and isinstance(self.visual, ModifiedResNet):
-            if self.visual.attnpool is not None:
-                std = self.visual.attnpool.c_proj.in_features ** -0.5
-                nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.k_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.v_proj.weight, std=std)
-                nn.init.normal_(self.visual.attnpool.c_proj.weight, std=std)
-
-            for resnet_block in [self.visual.layer1, self.visual.layer2, self.visual.layer3, self.visual.layer4]:
-                for name, param in resnet_block.named_parameters():
-                    if name.endswith("bn3.weight"):
-                        nn.init.zeros_(param)
-
-        if not self.use_cxrbert:
-            proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
-            attn_std = self.transformer.width ** -0.5
-            fc_std = (2 * self.transformer.width) ** -0.5
-            for block in self.transformer.resblocks:
-                nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
-                nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
-                nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
-                nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
-
-        if hasattr(self, "text_projection") and self.text_projection is not None:
-            nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
+        nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
 
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens
@@ -436,7 +422,6 @@ class CLIP(nn.Module):
         mask.triu_(1)  # zero out the lower diagonal
         return mask
 
-    # TODO: this should still work with BioVision but flagging regardless
     @property
     def dtype(self):
         return self.visual.encoder.encoder.conv1.weight.dtype
@@ -445,7 +430,12 @@ class CLIP(nn.Module):
         return self.visual(image.type(self.dtype)).projected_global_embedding
 
     def encode_text(self, text):
-        if not self.use_cxrbert:
+        if self.use_huggingface_bert:
+            bert_output = self.transformer(text.input_ids, text.attention_mask)
+            last_hidden_state = bert_output.hidden_states[-1]
+            cls_token = last_hidden_state[:, 0, :]
+            x = cls_token @ self.text_projection
+        else:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
             x = x + self.positional_embedding.type(self.dtype)
@@ -457,10 +447,6 @@ class CLIP(nn.Module):
             # x.shape = [batch_size, n_ctx, transformer.width]
             # take features from the eot embedding (eot_token is the highest number in each sequence)
             x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
-        else:
-            x = text.input_ids
-            x = self.transformer.model.get_projected_text_embeddings(x, text.attention_mask)
-
         return x
 
     def forward(self, image, text):
@@ -503,30 +489,7 @@ def convert_weights(model: nn.Module):
 
     model.apply(_convert_weights_to_fp16)
 
-# this function is only called if we're not doing full BioVIL
-def update_state_dict(state_dict: dict, model: nn.Module):
-    """
-    Creates an updated state dict object by starting with the model's state dict
-    and updating based on the values in the state_dict argument
-    """
-    # create new state dict object from current model
-    updated_state_dict = model.state_dict().copy()
-    # filter out entries from state_dict that aren't in the model's state dict 
-    items_to_update = {k: v for k, v in state_dict.items() if k in updated_state_dict}
-    if model.use_biovision:
-        items_to_update = {k: v for k, v in items_to_update.items() if not k.startswith('visual')}
-        if model.use_cxrbert:
-            raise Exception('this function should not be called if both use_cxrbert and use_biovision are true')
-        # dimensions won't line up so don't use text projection
-        del items_to_update['text_projection']
-    # TODO: remove after testing
-    # print("items to update: ", items_to_update.keys())
-    # perform the update for the new state dict
-    updated_state_dict.update(items_to_update)
-    return updated_state_dict
-
-
-def build_model(image_tower_type: ImageTowerType, state_dict: dict, use_cxrbert=False, use_biovision=False):
+def build_model(image_tower_type: ImageTowerType, state_dict: dict, use_huggingface_bert=False, huggingface_bert_key='cxr'):
 
     vit = "visual.proj" in state_dict
 
@@ -555,41 +518,51 @@ def build_model(image_tower_type: ImageTowerType, state_dict: dict, use_cxrbert=
 
     if image_tower_type:
         model = CLIP(
-                 embed_dim=EMBED_DIM,
-                 # vision
-                 image_tower_type=image_tower_type,
-                 # text
-                 context_length=context_length,
-                 vocab_size=vocab_size,
-                 transformer_width=transformer_width,
-                 transformer_heads=transformer_heads,
-                 transformer_layers=transformer_layers,
-                 use_cxrbert=use_cxrbert,
-                )
+            embed_dim=EMBED_DIM,
+            # vision
+            image_tower_type=image_tower_type,
+            # text
+            context_length=context_length,
+            vocab_size=vocab_size,
+            transformer_width=transformer_width,
+            transformer_heads=transformer_heads,
+            transformer_layers=transformer_layers,
+            use_huggingface_bert=use_huggingface_bert,
+            huggingface_bert_key=huggingface_bert_key
+        )
     else:
+        # TODO: Fix below.
+        raise ValueError("Using generic initializer that is not prepared, please specify image tower type.")
         model = CLIP(
             embed_dim=embed_dim,
             image_resolution=image_resolution, 
             vision_layers=vision_layers, 
             vision_width=vision_width, 
             vision_patch_size=vision_patch_size,
-            context_length=context_length, vocab_size=vocab_size, 
+            context_length=context_length, 
+            vocab_size=vocab_size, 
             transformer_width=transformer_width, 
             transformer_heads=transformer_heads, 
             transformer_layers=transformer_layers, 
-            use_cxrbert=use_cxrbert,
+            use_huggingface_bert=use_huggingface_bert, 
+            huggingface_bert_key=huggingface_bert_key
         )
 
-    for key in ["input_resolution", "context_length", "vocab_size"]:
+    for key in ["input_resolution", "context_length", "vocab_size", "text_projection"]:
         if key in state_dict:
             del state_dict[key]
 
-    if not model.use_cxrbert:
+    if not model.use_huggingface_bert:
         convert_weights(model)
 
-    # only update if we're not doing full BioViL
-    if not (use_biovision and use_cxrbert):
-        updated_state_dict = update_state_dict(state_dict, model)
-        model.load_state_dict(updated_state_dict)
+        # Only load in the weights for the text transformer, if hugging face is not being used
+        start_string = "transformer."
+        transformer_state_dict = {key[len(start_string):]: val for key, val in state_dict.items() if key.startswith(start_string)}
+        model.transformer.load_state_dict(transformer_state_dict, strict=False)
 
+        keys_to_load = ["token_embedding", "positional_embedding", "ln_final"]
+        contains = lambda x: any(x.startswith(key) for key in keys_to_load)
+        extra_state_dict = {k: v for k, v in state_dict.items() if contains(k)}
+        print(f"Also loading {extra_state_dict.keys()}")
+        model.load_state_dict(extra_state_dict, strict=False)
     return model.eval()

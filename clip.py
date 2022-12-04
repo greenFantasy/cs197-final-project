@@ -96,7 +96,7 @@ def available_models() -> List[str]:
 
 
 def load(name: str, image_tower_type: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu", 
-         jit=True, use_cxrbert=False):
+         jit=True, use_huggingface_bert=False, huggingface_bert_key='cxr'):
     """Load a CLIP model
 
     Parameters
@@ -137,7 +137,8 @@ def load(name: str, image_tower_type: str, device: Union[str, torch.device] = "c
         state_dict = torch.load(model_path, map_location="cpu")
 
     if not jit:
-        model = build_model(image_tower_type, state_dict or model.state_dict(), use_cxrbert=use_cxrbert).to(device)
+        model = build_model(image_tower_type, state_dict or model.state_dict(), use_huggingface_bert=use_huggingface_bert, 
+                            huggingface_bert_key=huggingface_bert_key).to(device)
         if str(device) == "cpu":
             model.float()
         return model, None # _transform(model.visual.input_resolution)
