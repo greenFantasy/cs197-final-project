@@ -16,6 +16,6 @@ momentum: 0.9
 context_length: 77
 random_init: False
 model_name: "UU"
-use_cxrbert: True
+use_huggingface_bert: True
 lock_text: False
 lock_vision: False

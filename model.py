@@ -29,13 +29,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, BertForMaskedLM
 from biovil_inference import get_biovil_resnet as BioVision
 
-
+BIOVIL_EMBED_DIM = 128
 HUGGING_FACE_BERT_URLS = {"cxr": "microsoft/BiomedVLP-CXR-BERT-specialized", 
                           "blue": "bionlp/bluebert_pubmed_uncased_L-12_H-768_A-12d",
                           "clinical": "emilyalsentzer/Bio_ClinicalBERT"}
+HUGGING_FACE_BERT_WIDTHS = {"cxr": 768, "blue": 768, "clinical": 768}
 
 
 class Bottleneck(nn.Module):
@@ -231,19 +232,20 @@ class Transformer(nn.Module):
 
 
 class HUGGINGFACE_BERT(nn.Module):
-    def __init__(self, key="blue") -> None:
+    def __init__(self, key="cxr") -> None:
         super().__init__()
-        if key not in HUGGING_FACE_BERT_URLS.keys():
+        if key not in HUGGING_FACE_BERT_URLS:
             raise ValueError(f"Key is invalid: {key}")
-        model_url = HUGGING_FACE_BERT_URLS[key]
-        self.url = model_url
-        bert = AutoModel.from_pretrained(model_url, trust_remote_code=True, revision='main')
-        self.model = bert
-        self.width = 128
+        self.key = key
+        self.model_url = HUGGING_FACE_BERT_URLS[self.key]
+        self.model = AutoModel.from_pretrained(self.model_url, trust_remote_code=True)
+        self.width = HUGGING_FACE_BERT_WIDTHS[self.key]
 
-    def forward(self, x: torch.Tensor):
-        output = self.model(x)
-        return output
+    def forward(self, input_ids, attention_mask):
+        # the CXRBERT class will have a different output, but the code will still be compatiable
+        # because it will still have a hidden_states key which is all we care about right now
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, 
+                          output_hidden_states=True, return_dict=True)
 
 
 class VisualTransformer(nn.Module):
@@ -282,8 +284,6 @@ class VisualTransformer(nn.Module):
 
         return x
 
-# bit hacky
-BIOVIL_EMBED_DIM = 128
 
 class CLIP(nn.Module):
     def __init__(self,
@@ -301,7 +301,7 @@ class CLIP(nn.Module):
                  transformer_layers: int,
                  use_huggingface_bert: bool,
                  use_biovision: bool,
-                 huggingface_bert_key: str= "cxr",
+                 huggingface_bert_key: str = "cxr",
                  ):
         super().__init__()
 
@@ -341,17 +341,19 @@ class CLIP(nn.Module):
             )
             if self.use_biovision:
                 self.text_projection = nn.Parameter(torch.empty(transformer_width, BIOVIL_EMBED_DIM))
+            # this might be a problem down the line because we want everything to project down to 128 now
             else:
                 self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         else:
             self.transformer = HUGGINGFACE_BERT(key = self.huggingface_bert_key)
             url = self.transformer.url
             print(f"Loading Tokenizer from the following Hugging Face Index: {url}")
-            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True, revision='main')
-            
+            self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True)
+            self.text_projection = nn.Parameter(torch.empty(self.transformer.width, BIOVIL_EMBED_DIM))
+
             # vision project head init
             if not self.use_biovision:
-                self.vision_projection = nn.Parameter(torch.empty(embed_dim, self.transformer.width))
+                self.vision_projection = nn.Parameter(torch.empty(embed_dim, BIOVIL_EMBED_DIM))
 
         self.vocab_size = vocab_size
         self.token_embedding = nn.Embedding(vocab_size, transformer_width)
@@ -419,7 +421,12 @@ class CLIP(nn.Module):
             return self.visual(image.type(self.dtype)).projected_global_embedding
 
     def encode_text(self, text):
-        if not self.use_huggingface_bert:
+        if self.use_huggingface_bert:
+            bert_output = self.transformer(text.input_ids, text.attention_mask)
+            last_hidden_state = bert_output.hidden_states[-1]
+            cls_token = last_hidden_state[:, 0, :]
+            x = self.text_projection(cls_token)
+        else:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
             x = x + self.positional_embedding.type(self.dtype)
@@ -431,10 +438,6 @@ class CLIP(nn.Module):
             # x.shape = [batch_size, n_ctx, transformer.width]
             # take features from the eot embedding (eot_token is the highest number in each sequence)
             x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
-        else:
-            x = text.input_ids
-            x = self.transformer.model.get_projected_text_embeddings(x, text.attention_mask)
-
         return x
 
     def forward(self, image, text):

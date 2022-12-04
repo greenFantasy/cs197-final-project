@@ -206,28 +206,25 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_huggingf
     
     
 def preprocess_text(texts, model):
-    if not model.use_huggingface_bert:
-        if model.context_length is None: 
-            model = model.module
-            
-        _tokenizer = SimpleTokenizer()
-        sot_token = _tokenizer.encoder["<|startoftext|>"]
-        eot_token = _tokenizer.encoder["<|endoftext|>"]
-        all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
-        result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
-        
-        for i, tokens in enumerate(all_tokens):
-            if len(tokens) > model.context_length:
-                tokens = tokens[:model.context_length]
-                tokens[model.context_length - 1] = eot_token
-            result[i, :len(tokens)] = torch.tensor(tokens)
-        return result
-    else:
-        
-        return model.tokenizer.batch_encode_plus(batch_text_or_text_pairs=texts,
-                                                add_special_tokens=True,
-                                                padding='longest',
-                                                return_tensors='pt')
+    # use specific tokenizer associated with each HuggingFace model
+    if model.use_huggingface_bert:
+        return model.tokenizer(text=texts, add_special_tokens=True, padding='longest', return_tensors='pt')
+
+    if model.context_length is None: 
+        model = model.module
+
+    _tokenizer = SimpleTokenizer()
+    sot_token = _tokenizer.encoder["<|startoftext|>"]
+    eot_token = _tokenizer.encoder["<|endoftext|>"]
+    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+    result = torch.zeros(len(all_tokens), model.context_length, dtype=torch.long)
+    
+    for i, tokens in enumerate(all_tokens):
+        if len(tokens) > model.context_length:
+            tokens = tokens[:model.context_length]
+            tokens[model.context_length - 1] = eot_token
+        result[i, :len(tokens)] = torch.tensor(tokens)
+    return result
 
 def make(config, cxr_filepath, txt_filepath, model_path=None): 
     '''
