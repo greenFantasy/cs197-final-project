@@ -99,11 +99,15 @@ class CLIPImageEncoder(ImageEncoder):
 class CLIPImageModel(ImageModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.projector = self.projector.float()
+    
+    def get_dtype(self):
+        return list(self.projector.parameters())[0].dtype
     
     def forward(self, x):
         with torch.set_grad_enabled(not self.freeze_encoder):
             patch_x, pooled_x = self.encoder(x, return_patch_embeddings=True)
-            projected_patch_embeddings = self.projector(patch_x)
+            projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
             projected_global_embedding = projected_patch_embeddings
 
         logits = self.classifier(pooled_x) if self.classifier else None
@@ -156,5 +160,6 @@ def _clip_vision(device="cuda" if torch.cuda.is_available() else "cpu"):
     model.encoder = CLIPImageEncoder(clip_resnet50=clip_vision, img_model_type="resnet50")
     model.feature_size = 1024
     model.projector = MLP(input_dim=model.feature_size, output_dim=joint_feature_size,
-                            hidden_dim=joint_feature_size, use_1x1_convs=False).float()
+                            hidden_dim=joint_feature_size, use_1x1_convs=False)
+    model.projector = model.projector.to(model.encoder.encoder.conv1.weight.dtype)
     return model.to(device).eval()

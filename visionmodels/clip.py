@@ -453,8 +453,8 @@ def build_model(state_dict: dict):
         if key in state_dict:
             del state_dict[key]
 
-    if True:
-        convert_weights(model)
-        print("Converting weights")
+    # if True:
+        # convert_weights(model)
+        # print("Converting weights")
     model.load_state_dict(state_dict)
     return model.eval()

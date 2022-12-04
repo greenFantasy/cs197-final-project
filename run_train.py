@@ -1,20 +1,20 @@
+print("Opening file")
+
 import os
-import pprint
 import argparse
-import hydra
 from tqdm import tqdm
 
+print("Imported simple libaries")
+
 import torch
-from torch.utils import data
 from torch import nn
 import torch.optim as optim
-from torchvision.transforms import Compose, Normalize, Resize
 
-import clip
-from model import CLIP
-from simple_tokenizer import SimpleTokenizer
+print("Imported torch libaries")
 
-from train import train_main, load_data, load_clip, preprocess_text
+from train import load_data, load_clip, preprocess_text, DefaultBiovisionConfig
+
+print("Imported from train.py")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -27,14 +27,14 @@ def parse_args():
     parser.add_argument('--save_interval', type=int, default=500)
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--save_dir', type=str, default="checkpoints/", help="Directory to save the trained model.")
-    parser.add_argument('--seed', type=int, default=1234)
+    parser.add_argument('--seed', type=int, default=124)
     parser.add_argument('--optimizer', type=str, default="sgd")
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--context_length', type=int, default=77)
     parser.add_argument('--random_init', action='store_true')
     parser.add_argument('--model_name', type=str, default="pt-imp")
     parser.add_argument('--use_huggingface_bert', action='store_true')
-    parser.add_argument('--use_biovision', action='store_true')
+    parser.add_argument('--image_tower_type', type=str, required=True)
     parser.add_argument('--huggingface_bert_key', type=str, action='store', default='cxr')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
@@ -42,15 +42,17 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-@hydra.main(version_base=None, config_path="configs", config_name="defaults.yaml")
+# @hydra.main(version_base=None, config_path="configs", config_name="defaults.yaml")
 def model_pipeline(config): #, verbose=0): 
     
-    print(config)
-    config = config.locking
+    print(config, flush=True)
+    # config = config.locking
     
     torch.manual_seed(config.seed)
     # make the model, data, and optimization problem
     model, data_loader, device, criterion, optimizer = make(config)
+    
+    print("Training beginning!")
 
     # and use them to train the model
     train(model, data_loader, device, criterion, optimizer, config)
@@ -65,6 +67,7 @@ def model_pipeline(config): #, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
+    config.biovision = DefaultBiovisionConfig()
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, 
                                     pretrained=pretrained, column="impression", biovision_config=config.biovision)
     model = load_clip(config.image_tower_type, model_path=None, pretrained=pretrained, context_length=config.context_length, 
@@ -128,7 +131,7 @@ def train(model, loader, device, criterion, optimizer, config):
         running_loss = 0.0 # running loss over batch
         for data in tqdm(loader):
             # get the images
-            images = data['img']
+            images = data['img'].float()
 
             texts = data['txt']
             texts = preprocess_text(texts, model) 
@@ -183,8 +186,8 @@ def save(model, path):
     torch.save(model.state_dict(), path)
     
 if __name__ == "__main__":
-    # args = parse_args()
-    # print(args)
-    model = model_pipeline()
+    args = parse_args()
+    print(args)
+    model = model_pipeline(args)
     
 
