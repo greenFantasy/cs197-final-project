@@ -1,6 +1,7 @@
 import os
 import argparse
 from tqdm import tqdm
+import wandb
 
 import torch
 from torch import nn
@@ -114,14 +115,21 @@ def train(model, loader, device, criterion, optimizer, config):
     if not os.path.exists(model_save_dir): 
         # Create a new folder if not exists
         os.makedirs(model_save_dir)
-    
+
+    #setup wandb
+    wandb_config_args = ["lr", "epochs", "batch_size", "momentum", "seed", "optimizer", "lock_text", "lock_vision", 
+                         "use_huggingface_bert", "image_tower_type", "huggingface_bert_key"]
+    wandb.login()
+    wandb.init(name=config.model_name, project="cs197-final-project", entity="team_rack")
+    wandb.config={key: vars(config)[key] for key in wandb_config_args}
+
     # Run training
     total_batches = len(loader) * config.epochs
     example_ct = 0  # number of examples seen
     batch_ct = 0
     report_freq = config.log_interval
     highest_val_auc = 0 # save highest mean auc
-    
+
     for epoch in range(config.epochs):
         running_loss = 0.0 # running loss over batch
         for data in tqdm(loader):
@@ -143,11 +151,15 @@ def train(model, loader, device, criterion, optimizer, config):
                 running_loss = 0.0
             
             if (batch_ct % config.save_interval) == 0: 
-                model_path = os.path.join(model_save_dir, "checkpoint_{batch_ct}.pt".format(
-                    batch_ct=str(batch_ct), 
-                ))
+                file_name = f"checkpoint_{config.model_name}_{batch_ct}"
+                model_path = os.path.join(model_save_dir, file_name)
                 print("Saved checkpoint to: ", model_path)
                 save(model, model_path)
+                artifact = wandb.Artifact(name=file_name, type='model checkpoint')
+                artifact.add_file(local_path=model_path)
+                wandb.run.log_artifact(artifact)
+
+    wandb.finish()
                 
 def train_batch(images, texts, model, device, criterion, optimizer):
     images, texts = images.to(device), texts.to(device)
@@ -176,6 +188,7 @@ def train_batch(images, texts, model, device, criterion, optimizer):
 def train_log(loss, example_ct, epoch):
     loss = float(loss)
     print(f"Loss after " + str(example_ct).zfill(5) + f" examples: {loss:.3f}", flush=True)
+    wandb.log({"Epoch": epoch, "Example Count": example_ct, "Loss": round(loss, 3)})
     
 def save(model, path): 
     torch.save(model.state_dict(), path)
@@ -184,5 +197,3 @@ if __name__ == "__main__":
     args = parse_args()
     print(args)
     model = model_pipeline(args)
-    
-
