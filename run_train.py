@@ -175,7 +175,7 @@ def train_batch(images, texts, model, device, criterion, optimizer):
 
 def train_log(loss, example_ct, epoch):
     loss = float(loss)
-    print(f"Loss after " + str(example_ct).zfill(5) + f" examples: {loss:.3f}")
+    print(f"Loss after " + str(example_ct).zfill(5) + f" examples: {loss:.3f}", flush=True)
     
 def save(model, path): 
     torch.save(model.state_dict(), path)
