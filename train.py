@@ -85,8 +85,11 @@ class CXRDataset(data.Dataset):
         return sample
 
 def get_biovil_transform():
-    TRANSFORM_RESIZE = 512
-    TRANSFORM_CENTER_CROP_SIZE = 480
+    # TRANSFORM_RESIZE = 512
+    # TRANSFORM_CENTER_CROP_SIZE = 480
+    
+    TRANSFORM_RESIZE = 256
+    TRANSFORM_CENTER_CROP_SIZE = 224
     
     biovil_transform = create_chest_xray_transform_for_inference(
         resize=TRANSFORM_RESIZE,
