@@ -29,12 +29,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import AutoModel, AutoTokenizer, BertForMaskedLM
+from transformers import AutoModel, AutoTokenizer
 from biovil_inference import get_biovil_resnet as BioVision
 
 BIOVIL_EMBED_DIM = 128
 HUGGING_FACE_BERT_URLS = {"cxr": "microsoft/BiomedVLP-CXR-BERT-specialized", 
-                          "blue": "bionlp/bluebert_pubmed_uncased_L-12_H-768_A-12d",
+                          "blue": "bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12",
                           "clinical": "emilyalsentzer/Bio_ClinicalBERT"}
 HUGGING_FACE_BERT_WIDTHS = {"cxr": 768, "blue": 768, "clinical": 768}
 
@@ -346,7 +346,7 @@ class CLIP(nn.Module):
                 self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         else:
             self.transformer = HUGGINGFACE_BERT(key = self.huggingface_bert_key)
-            url = self.transformer.url
+            url = self.transformer.model_url
             print(f"Loading Tokenizer from the following Hugging Face Index: {url}")
             self.tokenizer = AutoTokenizer.from_pretrained(url, trust_remote_code=True)
             self.text_projection = nn.Parameter(torch.empty(self.transformer.width, BIOVIL_EMBED_DIM))
@@ -394,6 +394,9 @@ class CLIP(nn.Module):
         if hasattr(self, "text_projection") and self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
 
+        if hasattr(self, "vision_projection") and self.vision_projection is not None:
+            nn.init.normal_(self.vision_projection, std=self.vision_projection.shape[0] ** -0.5)
+
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens
         # pytorch uses additive attention mask; fill with -inf
@@ -425,7 +428,7 @@ class CLIP(nn.Module):
             bert_output = self.transformer(text.input_ids, text.attention_mask)
             last_hidden_state = bert_output.hidden_states[-1]
             cls_token = last_hidden_state[:, 0, :]
-            x = self.text_projection(cls_token)
+            x = cls_token @ self.text_projection
         else:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
@@ -496,6 +499,8 @@ def update_state_dict(state_dict: dict, model: nn.Module):
             raise Exception('this function should not be called if both use_huggingface_bert and use_biovision are true')
         # dimensions won't line up so don't use text projection
         del items_to_update['text_projection']
+    if model.use_huggingface_bert:
+        del items_to_update['text_projection']
     # TODO: remove after testing
     # print("items to update: ", items_to_update.keys())
     # perform the update for the new state dict
@@ -503,7 +508,7 @@ def update_state_dict(state_dict: dict, model: nn.Module):
     return updated_state_dict
 
 
-def build_model(state_dict: dict, use_huggingface_bert=False, use_biovision=False):
+def build_model(state_dict: dict, use_huggingface_bert=False, use_biovision=False, huggingface_bert_key='cxr'):
 
     vit = "visual.proj" in state_dict
 
@@ -533,7 +538,8 @@ def build_model(state_dict: dict, use_huggingface_bert=False, use_biovision=Fals
     model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size,
-        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, use_huggingface_bert, use_biovision
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers, 
+        use_huggingface_bert, use_biovision, huggingface_bert_key
     )
 
     for key in ["input_resolution", "context_length", "vocab_size"]:

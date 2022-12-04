@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--model_name', type=str, default="pt-imp")
     parser.add_argument('--use_huggingface_bert', action='store_true')
     parser.add_argument('--use_biovision', action='store_true')
+    parser.add_argument('--huggingface_bert_key', type=str, action='store', default='cxr')
     parser.add_argument('--lock_text', action='store_true')
     parser.add_argument('--lock_vision', action='store_true')
     parser.add_argument('--img_path_list', type=str, default='data/cxr_paths.csv', help="File containing paths to all chest x-ray images in dataset.")
@@ -65,7 +66,9 @@ def model_pipeline(config): #, verbose=0):
 def make(config): 
     pretrained = not config.random_init
     data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_huggingface_bert=config.use_huggingface_bert, use_biovision=config.biovision.use_biovision)
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, 
+                      use_huggingface_bert=config.use_huggingface_bert, use_biovision=config.biovision.use_biovision, 
+                      huggingface_bert_key=config.huggingface_bert_key)
     model.to(device)
     print('Model on Device.')
 
@@ -74,8 +77,8 @@ def make(config):
     params_key = 'params'
     if config.use_huggingface_bert and not config.biovision.use_biovision:
         params_list.append(model.vision_projection)
-    if not config.use_huggingface_bert:
-        params_list.append(model.text_projection)
+    # this should always exist now with modifications to bert-based text stacks
+    params_list.append(model.text_projection)
     if not config.lock_text:
         params_list.append(model.transformer.parameters())
         if not config.use_huggingface_bert:

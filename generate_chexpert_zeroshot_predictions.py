@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--model_path', type=str, default="")
     parser.add_argument('--use_huggingface_bert', action='store_true')
     parser.add_argument('--use_biovision', action='store_true')
+    parser.add_argument('--huggingface_bert_key', type=str, action='store', default='cxr')
     parser.add_argument('--image_csv_path', type=str, default='data/CheXpert/test_labels.csv')
     parser.add_argument('--results_dir', type=str, default="predictions")
     args = parser.parse_args()
@@ -33,6 +34,7 @@ def generate_predictions(config, model_paths):
     cache_dir = None
     use_huggingface_bert = config.use_huggingface_bert
     use_biovision = config.use_biovision
+    huggingface_bert_key = config.huggingface_bert_key
     image_csv_path = config.image_csv_path
     
     predictions, _ = zero_shot.ensemble_models(
@@ -43,6 +45,7 @@ def generate_predictions(config, model_paths):
         cache_dir=cache_dir,
         use_huggingface_bert=use_huggingface_bert,
         use_biovision=use_biovision,
+        huggingface_bert_key=huggingface_bert_key,
         image_csv_path=image_csv_path
     )
     

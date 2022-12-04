@@ -156,7 +156,8 @@ def load_data(cxr_filepath, txt_filepath, batch_size=4, column='report', pretrai
     data_loader = data.DataLoader(torch_dset, **loader_params)
     return data_loader, device
     
-def load_clip(model_path=None, pretrained=False, context_length=77, use_huggingface_bert=False, use_biovision=False):
+def load_clip(model_path=None, pretrained=False, context_length=77, use_huggingface_bert=False, use_biovision=False, 
+              huggingface_bert_key='cxr'):
     '''
     FUNCTION: load_clip
     -------------------------------
@@ -184,7 +185,8 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_huggingf
         'transformer_heads': 8,
         'transformer_layers': 12,
         'use_huggingface_bert': use_huggingface_bert,
-        'use_biovision': use_biovision
+        'use_biovision': use_biovision,
+        'huggingface_bert_key': huggingface_bert_key
     }
     
     # set device 
@@ -193,7 +195,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_huggingf
     if pretrained: 
         # load clip pre-trained model
         model, _ = clip.load("ViT-B/32", device=device, jit=False, use_huggingface_bert=use_huggingface_bert, 
-                                      use_biovision=use_biovision)
+                                      use_biovision=use_biovision, huggingface_bert_key=huggingface_bert_key)
         print("Loaded in pretrained model.")
     else: 
         model = CLIP(**params)

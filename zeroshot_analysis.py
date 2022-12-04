@@ -13,6 +13,7 @@ def parse_args():
     parser.add_argument('--model_dir', type=str, default="fixed_stored_UU")
     parser.add_argument('--use_huggingface_bert', action='store_true')
     parser.add_argument('--use_biovision', action='store_true')
+    parser.add_argument('--huggingface_bert_key', type=str, action='store', default='cxr')
     parser.add_argument('--results_dir', type=str, default="bootvals")
     args = parser.parse_args()
     return args
@@ -33,7 +34,8 @@ def model_zeroshot_confidence_interval(config, model_paths):
         cxr_pair_template=cxr_pair_template, 
         cache_dir=cache_dir,
         use_huggingface_bert=config.use_huggingface_bert,
-        use_biovision=config.use_biovision
+        use_biovision=config.use_biovision,
+        huggingface_bert_key=config.huggingface_bert_key
     )
 
     cxr_true_labels_path = "/home/ec2-user/cheXpert-test-set-labels/groundtruth.csv"
