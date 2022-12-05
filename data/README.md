@@ -1,4 +1,4 @@
-# Downloading Data Instructions
+# Downloading and Processing Data Instructions
 
 ## CheXpert Data
 
@@ -15,3 +15,17 @@ Navigate to the folder in which azcopy was downloaded. Now run
 ```
 
 The local data directory link should point to the folder `data/` inside this repository. This will download two folders `CheXpert` and `chexlocalize`. The `chexlocalize` directory is extra and can now be deleted. We will be using the `CheXpert` dataset for zero-shot evaluation in this project.
+
+## VinDr-CXR Data
+
+You can find information about the VinDr-CXR dataset here: https://www.nature.com/articles/s41597-022-01498-w. Also, you can download the dataset from here: https://physionet.org/content/vindr-cxr/1.0.0/. We will not be using the train data so you can refrain from downloading it. 
+
+We will work under the assumption that once the data has been downloaded, it is found within the `vindr-cxr/{version}` folder. In this case the dataset version is 1.0.0 so the data is found in the `vindr-cxr/1.0.0` folder. From there the structure will be as shown on PhysioNet.
+
+We will then need to process the dataset with the following command.
+
+```
+python run_preprocess.py --csv_out_path data/vindr_cxr_paths.csv --cxr_out_path data/vindr_cxr.h5 --dataset_type vindr --chest_x_ray_path vindr-cxr/1.0.0/test
+```
+
+This will create a `vindr_cxr.h5` file in the `data` folder.
