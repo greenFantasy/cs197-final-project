@@ -99,7 +99,19 @@ class CLIPImageEncoder(ImageEncoder):
 class CLIPImageModel(ImageModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.projector = self.projector.float()
+        joint_feature_size = 128
+        clip_vision = load()
+        self.encoder = CLIPImageEncoder(clip_resnet50=clip_vision, img_model_type="resnet50")
+        self.feature_size = 1024
+        self.use_MLP = False
+        if self.use_MLP:
+            self.projector = MLP(input_dim=self.feature_size, output_dim=joint_feature_size,
+                                    hidden_dim=joint_feature_size, use_1x1_convs=True)
+        else:
+            print("Using the new linear projector for CLIP instead")
+            self.projector = torch.nn.Linear(self.feature_size, joint_feature_size, bias=False)
+            torch.nn.init.normal_(self.projector.weight, std=self.feature_size ** -0.5)
+        self.projector = self.projector.to(self.encoder.encoder.conv1.weight.dtype)
     
     def get_dtype(self):
         return list(self.projector.parameters())[0].dtype
@@ -107,8 +119,13 @@ class CLIPImageModel(ImageModel):
     def forward(self, x):
         with torch.set_grad_enabled(not self.freeze_encoder):
             patch_x, pooled_x = self.encoder(x, return_patch_embeddings=True)
-            projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
-            projected_global_embedding = projected_patch_embeddings
+            if self.use_MLP:
+                patch_x = patch_x.unsqueeze(-1).unsqueeze(-1)
+                projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
+                projected_global_embedding = torch.mean(projected_patch_embeddings, dim=(2, 3))
+            else:
+                projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
+                projected_global_embedding = projected_patch_embeddings
 
         logits = self.classifier(pooled_x) if self.classifier else None
         return ImageModelOutput(img_embedding=pooled_x,
@@ -156,10 +173,5 @@ def load(name: str = "resnet50", device: Union[str, torch.device] = "cuda" if to
 def _clip_vision(device="cuda" if torch.cuda.is_available() else "cpu"):
     joint_feature_size = 128
     model = CLIPImageModel("resnet50", joint_feature_size=joint_feature_size)
-    clip_vision = load()
-    model.encoder = CLIPImageEncoder(clip_resnet50=clip_vision, img_model_type="resnet50")
-    model.feature_size = 1024
-    model.projector = MLP(input_dim=model.feature_size, output_dim=joint_feature_size,
-                            hidden_dim=joint_feature_size, use_1x1_convs=False)
-    model.projector = model.projector.to(model.encoder.encoder.conv1.weight.dtype)
+    print(model.projector)
     return model.to(device).eval()
