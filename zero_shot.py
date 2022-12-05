@@ -79,8 +79,7 @@ class CXRTestDataset(data.Dataset):
     
         return sample
 
-def load_clip(model_path, pretrained=False, context_length=77, use_huggingface_bert=False, use_biovision=False, 
-              huggingface_bert_key='cxr'): 
+def load_clip(image_tower_type, model_path, pretrained=False, context_length=77, use_huggingface_bert=False, huggingface_bert_key='cxr'): 
     """
     FUNCTION: load_clip
     ---------------------------------
@@ -88,6 +87,7 @@ def load_clip(model_path, pretrained=False, context_length=77, use_huggingface_b
     device = torch.device("cpu")
     if pretrained is False: 
         # use new model params
+        raise ValueError("pretrained cannot be False when loading CLIP for zero_shot")
         params = {
             'embed_dim':768,
             'image_resolution': 320,
@@ -106,8 +106,7 @@ def load_clip(model_path, pretrained=False, context_length=77, use_huggingface_b
 
         model = CLIP(**params)
     else: 
-        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_huggingface_bert=use_huggingface_bert, 
-                             use_biovision=use_biovision, huggingface_bert_key=huggingface_bert_key) 
+        model, _ = clip.load("RN50", image_tower_type, device=device, jit=False, use_huggingface_bert=use_huggingface_bert, huggingface_bert_key=huggingface_bert_key) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 
@@ -236,50 +235,6 @@ def run_single_prediction(cxr_labels, template, model, loader, softmax_eval=True
     y_pred = predict(loader, model, zeroshot_weights, softmax_eval=softmax_eval)
     return y_pred
 
-def process_alt_labels(alt_labels_dict, cxr_labels): 
-    """
-        Process alt labels and return relevant info. If `alt_labels_dict` is 
-        None, return None. 
-    
-    Returns: 
-    * alt_label_list : list
-        List of all alternative labels
-    * alt_label_idx_map : dict
-        Maps alt label to idx of original label in cxr_labels
-        Needed to access correct column during evaluation
-       
-    """
-    
-    if alt_labels_dict is None: 
-        return None, None
-    
-    def get_inverse_labels(labels_alt_map: dict): 
-        """
-        Returns dict mapping alternative label back to actual label. 
-        Used for reference during evaluation.
-        """
-        inverse_labels_dict  = {}
-        for main in labels_alt_map:
-            inverse_labels_dict[main] = main # adds self to list of alt labels
-            for alt in labels_alt_map[main]:
-                inverse_labels_dict[alt] = main
-        return inverse_labels_dict
-    
-    inv_labels_dict = get_inverse_labels(alt_labels_dict)
-    alt_label_list = [w for w in inv_labels_dict.keys()]
-    
-    # create index map
-    index_map = dict()
-    for i, label in enumerate(cxr_labels): 
-          index_map[label] = i
-    
-    # make map to go from alt label directly to index
-    alt_label_idx_map = dict()
-    for alt_label in alt_label_list: 
-        alt_label_idx_map[alt_label] = index_map[inv_labels_dict[alt_label]]
-    
-    return alt_label_list, alt_label_idx_map 
-
 def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, context_length: int = 77, use_huggingface_bert=False, 
                      huggingface_bert_key='cxr'): 
     """
@@ -303,61 +258,6 @@ def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, con
     sum_pred = np.exp(pos_pred) + np.exp(neg_pred)
     y_pred = np.exp(pos_pred) / sum_pred
     return y_pred
-    
-def run_experiment(model, cxr_labels, cxr_templates, loader, y_true, alt_labels_dict=None, softmax_eval=True, context_length=77, use_bootstrap=True): 
-    '''
-    FUNCTION: run_experiment
-    ----------------------------------------
-    This function runs the zeroshot experiment on each of the templates
-    individually, and stores the results in a list. 
-    
-    args: 
-        * model - PyTorch model, trained clip model 
-        * cxr_labels - list, labels for a specific zero-shot task. (i.e. ['Atelectasis',...])
-        * cxr_templates - list, templates to input into model. If softmax_eval is True, 
-        this should be a list of tuples, where each tuple is a +/- pair
-        * loader - PyTorch data loader, loads in cxr images
-        * y_true - list, ground truth labels for test dataset
-        * softmax_eval (optional) - bool, if True, will evaluate results through softmax of pos vs. neg samples. 
-        * context_length - int, max number of tokens of text inputted into the model. 
-        * use_bootstrap (optional) - bool, whether or not to use bootstrap sampling
-        
-    Returns a list of results from the experiment. 
-    '''
-    
-    alt_label_list, alt_label_idx_map = process_alt_labels(alt_labels_dict, cxr_labels)
-    if alt_label_list is not None: 
-        eval_labels = alt_label_list
-    else: 
-        eval_labels = cxr_labels 
-    
-    results = []
-    for template in cxr_templates:
-        print('Phrase being used: ', template)
-        
-        try: 
-            if softmax_eval: 
-                y_pred = run_softmax_eval(model, loader, eval_labels, template, context_length=context_length)
-                
-            else: 
-                # get single prediction
-                y_pred = run_single_prediction(eval_labels, template, model, loader, 
-                                               softmax_eval=softmax_eval, context_length=context_length)
-#             print("y_pred: ", y_pred)
-        except: 
-            print("Argument error. Make sure cxr_templates is proper format.", sys.exc_info()[0])
-            raise
-    
-        # evaluate
-        if use_bootstrap: 
-            # compute bootstrap stats
-            boot_stats = bootstrap(y_pred, y_true, eval_labels, label_idx_map=alt_label_idx_map)
-            results.append(boot_stats) # each template has a pandas array of samples
-        else: 
-            stats = evaluate(y_pred, y_true, eval_labels)
-            results.append(stats)
-
-    return results, y_pred
 
 def make_true_labels(
     cxr_true_labels_path: str, 
@@ -389,8 +289,8 @@ def make_true_labels(
     return y_true
 
 def get_biovil_transform():
-    TRANSFORM_RESIZE = 512
-    TRANSFORM_CENTER_CROP_SIZE = 480
+    TRANSFORM_RESIZE = 256 # 512
+    TRANSFORM_CENTER_CROP_SIZE = 224 # 480
     
     biovil_transform = create_chest_xray_transform_for_inference(
         resize=TRANSFORM_RESIZE,
@@ -400,12 +300,12 @@ def get_biovil_transform():
     return biovil_transform
 
 def make(
+    image_tower_type: str,
     model_path: str, 
     cxr_filepath: str, 
     pretrained: bool = True, 
     context_length: bool = 77, 
     use_huggingface_bert=False,
-    use_biovision=False,
     huggingface_bert_key='cxr',
     image_csv_path=None,
 ):
@@ -427,14 +327,16 @@ def make(
     """
     # load model
     model = load_clip(
+        image_tower_type,
         model_path=model_path, 
         pretrained=pretrained, 
         context_length=context_length,
         use_huggingface_bert=use_huggingface_bert,
-        use_biovision=use_biovision,
         huggingface_bert_key=huggingface_bert_key
     )
 
+    use_biovision = image_tower_type == "biovision"
+    
     if not use_biovision:
         # load data
         transformations = [
@@ -463,6 +365,7 @@ def make(
 
 ## Run the model on the data set using ensembled models
 def ensemble_models(
+    image_tower_type: str, # Only supports one image tower type for the entire ensemble
     model_paths: List[str], 
     cxr_filepath: str, 
     cxr_labels: List[str], 
@@ -470,7 +373,6 @@ def ensemble_models(
     cache_dir: str = None, 
     save_name: str = None,
     use_huggingface_bert: bool = False,
-    use_biovision: bool = False,
     huggingface_bert_key: str = 'cxr',
     image_csv_path = None
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
@@ -489,10 +391,10 @@ def ensemble_models(
 
         # load in model and `torch.DataLoader`
         model, loader = make(
+            image_tower_type,
             model_path=path, 
             cxr_filepath=cxr_filepath, 
             use_huggingface_bert=use_huggingface_bert,
-            use_biovision=use_biovision,
             huggingface_bert_key=huggingface_bert_key,
             image_csv_path=image_csv_path
         ) 
@@ -521,133 +423,3 @@ def ensemble_models(
     y_pred_avg = np.mean(predictions, axis=0)
     
     return predictions, y_pred_avg
-
-def run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath, final_label_path, alt_labels_dict: dict = None, 
-                  softmax_eval = True, context_length=77, pretrained: bool = False, use_bootstrap=True, cutlabels=True, 
-                  use_huggingface_bert=False, use_biovision=False, huggingface_bert_key='cxr'): 
-    """
-    FUNCTION: run_zero_shot
-    --------------------------------------
-    This function is the main function to run the zero-shot pipeline given a dataset, 
-    labels, templates for those labels, ground truth labels, and config parameters.
-    
-    args: 
-        * cxr_labels - list
-            labels for a specific zero-shot task. (i.e. ['Atelectasis',...])
-            task can either be a string or a tuple (name of alternative label, name of label in csv)
-        * cxr_templates - list, phrases that will be indpendently tested as input to the clip model. If `softmax_eval` is True, this parameter should be a 
-        list of positive and negative template pairs stored as tuples. 
-        * model_path - String for directory to the weights of the trained clip model. 
-        * cxr_filepath - String for path to the chest x-ray images. 
-        * final_label_path - String for path to ground truth labels.
-
-        * alt_labels_dict (optional) - dict, map cxr_labels to list of alternative labels (i.e. 'Atelectasis': ['lung collapse', 'atelectatic lung', ...]) 
-        * softmax_eval (optional) - bool, if True, will evaluate results through softmax of pos vs. neg samples. 
-        * context_length (optional) - int, max number of tokens of text inputted into the model. 
-        * pretrained (optional) - bool, whether or not model uses pretrained clip weights
-        * use_bootstrap (optional) - bool, whether or not to use bootstrap sampling
-        * cutlabels (optional) - bool, if True, will keep columns of ground truth labels that correspond
-        with the labels inputted through `cxr_labels`. Otherwise, drop the first column and keep remaining. 
-    
-    Returns an array of results per template, each consists of a tuple containing a pandas dataframes 
-    for n bootstrap samples, and another pandas dataframe with the confidence intervals for each class.
-    """
-    
-    np.random.seed(97)
-    # make the model, data loader, and ground truth labels
-    model, loader = make(
-        model_path=model_path, 
-        cxr_filepath=cxr_filepath, 
-        pretrained=pretrained,
-        context_length=context_length,
-        use_huggingface_bert=use_huggingface_bert,
-        use_biovision=use_biovision,
-        huggingface_bert_key=huggingface_bert_key
-    )
-
-    y_true = make_true_labels(
-        cxr_true_labels_path=final_label_path, 
-        cxr_labels=cxr_labels, 
-        cutlabels=cutlabels,
-    )
-
-    # run multiphrase experiment
-    results, y_pred = run_experiment(model, cxr_labels, cxr_templates, loader, y_true, 
-                             alt_labels_dict=alt_labels_dict, softmax_eval=softmax_eval, context_length=context_length, use_bootstrap=use_bootstrap)
-    return results, y_pred
-
-# TODO: didn't add use_huggingface_bert or use_biovision flags because this function's not being used
-def run_cxr_zero_shot(model_path, context_length=77, pretrained=False): 
-    """
-    FUNCTION: run_cxr_zero_shot
-    --------------------------------------
-    This function runs zero-shot specifically for the cxr dataset. 
-    The only difference between this function and `run_zero_shot` is that
-    this function is already pre-parameterized for the 14 cxr labels evaluated
-    using softmax method of positive and negative templates. 
-    
-    args: 
-        * model_path - string, filepath of model being evaluated
-        * context_length (optional) - int, max number of tokens of text inputted into the model. 
-        * pretrained (optional) - bool, whether or not model uses pretrained clip weights
-        * use_bootstrap (optional) - bool, whether or not to use bootstrap sampling
-    
-    Returns an array of labels, and an array of results per template, 
-    each consists of a tuple containing a pandas dataframes 
-    for n bootstrap samples, and another pandas dataframe with the confidence intervals for each class.
-    """
-    cxr_filepath = '/deep/group/data/med-data/test_cxr.h5'
-    final_label_path = '/deep/group/data/med-data/final_paths.csv'
-    
-    cxr_labels = ['Atelectasis','Cardiomegaly', 
-                                      'Consolidation', 'Edema', 'Enlarged Cardiomediastinum', 'Fracture', 'Lung Lesion',
-                                      'Lung Opacity', 'No Finding','Pleural Effusion', 'Pleural Other', 'Pneumonia', 
-                                      'Pneumothorax', 'Support Devices']
-
-    # templates list of positive and negative template pairs
-    cxr_templates = [("{}", "no {}")]
-    
-    cxr_results = run_zero_shot(cxr_labels, cxr_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=final_label_path, softmax_eval=True, context_length=context_length, pretrained=pretrained, use_bootstrap=False, cutlabels=True)
-    
-    return cxr_labels, cxr_results[0]
-
-# TODO: didn't add use_huggingface_bert or use_biovision flags because this function's not being used
-def validation_zero_shot(model_path, context_length=77, pretrained=False): 
-    """
-    FUNCTION: validation_zero_shot
-    --------------------------------------
-    This function uses the CheXpert validation dataset to make predictions
-    on an alternative task (ap/pa, sex) in order to tune hyperparameters.
-    
-    args: 
-        * model_path - string, filepath of model being evaluated
-        * context_length (optional) - int, max number of tokens of text inputted into the model. 
-        * pretrained (optional) - bool, whether or not model uses pretrained clip weights
-        * use_bootstrap (optional) - bool, whether or not to use bootstrap sampling
-    
-    Returns an array of labels, and an array of results per template, 
-    each consists of a tuple containing a pandas dataframes 
-    for n bootstrap samples, and another pandas dataframe with the confidence intervals for each class.
-    """
-    cxr_sex_labels = ['Female', 'Male']
-
-    cxr_sex_templates = [
-                        #'{}', 
-    #                      'the patient is a {}',
-                         "the patient's sex is {}",
-                        ]
-    
-    # run zero shot experiment
-    sex_labels_path = '../../data/val_sex_labels.csv'
-    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True, cutlabels=False)
-   
-    results = run_zero_shot(cxr_sex_labels, cxr_sex_templates, model_path, cxr_filepath=cxr_filepath, final_label_path=sex_labels_path, softmax_eval=False, context_length=context_length, pretrained=True, use_bootstrap=True, cutlabels=False)
-    pass
-
-
-    
-    
-    
-    
-    
- 
