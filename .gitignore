@@ -5,6 +5,9 @@ data/*
 .hydra/
 cxr_data/*
 visionmodels/vision_pretrained/*
+results/*
+wandb/*
+vindr-cxr/*
 
 .DS_Store
 
