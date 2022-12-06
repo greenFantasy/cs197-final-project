@@ -381,6 +381,9 @@ class CLIP(nn.Module):
 
         if hasattr(self, "text_projection") and self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
+            
+        if hasattr(self, "vision_projection") and self.vision_projection is not None:
+            nn.init.normal_(self.vision_projection, std=self.transformer.width ** -0.5)
 
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens

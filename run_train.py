@@ -16,6 +16,9 @@ from simple_tokenizer import SimpleTokenizer
 
 from train import train_main, load_data, load_clip, preprocess_text
 
+import wandb
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cxr_filepath', type=str, default='data/cxr.h5', help="Directory to load chest x-ray image data from.")
@@ -45,7 +48,6 @@ def parse_args():
 def model_pipeline(config): #, verbose=0): 
     
     print(config)
-    config = config.locking
     
     torch.manual_seed(config.seed)
     # make the model, data, and optimization problem
@@ -64,15 +66,16 @@ def model_pipeline(config): #, verbose=0):
 
 def make(config): 
     pretrained = not config.random_init
-    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression", biovision_config=config.biovision)
-    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert, use_biovision=config.biovision.use_biovision)
+    data_loader, device = load_data(config.cxr_filepath, config.txt_filepath, batch_size=config.batch_size, pretrained=pretrained, column="impression")
+    model = load_clip(model_path=None, pretrained=pretrained, context_length=config.context_length, use_cxrbert=config.use_cxrbert, use_biovision=False)
     model.to(device)
     print('Model on Device.')
 
     # establish the parameters to train based on what is locked
     params_list = []
     params_key = 'params'
-    if config.use_cxrbert and not config.biovision.use_biovision:
+    
+    if config.use_cxrbert:
         params_list.append(model.vision_projection)
     if not config.use_cxrbert:
         params_list.append(model.text_projection)
@@ -84,6 +87,8 @@ def make(config):
     if not config.lock_vision:
         params_list.append(model.visual.parameters())
     params_list = [{params_key: param} for param in params_list]
+    #import pdb
+    #pdb.set_trace()
 
     # make the optimizer 
     criterion = nn.CrossEntropyLoss().cuda()
@@ -110,6 +115,13 @@ def train(model, loader, device, criterion, optimizer, config):
     if not os.path.exists(model_save_dir): 
         # Create a new folder if not exists
         os.makedirs(model_save_dir)
+    
+    #import pdb
+    #pdb.set_trace()
+    wandb_config_args = ["lr", "epochs", "batch_size", "momentum", "seed", "optimizer", "lock_text", "lock_vision", "image_tower_type"]
+    wandb.login()
+    wandb.init(name=config.model_name, project="cs197-final-project", entity="team_rack", 
+               config=config)
     
     # Run training
     total_batches = len(loader) * config.epochs
@@ -139,11 +151,15 @@ def train(model, loader, device, criterion, optimizer, config):
                 running_loss = 0.0
             
             if (batch_ct % config.save_interval) == 0: 
-                model_path = os.path.join(model_save_dir, "checkpoint_{batch_ct}.pt".format(
-                    batch_ct=str(batch_ct), 
-                ))
+                file_name = f"checkpoint_{config.model_name}_{batch_ct}"
+                model_path = os.path.join(model_save_dir, file_name)
                 print("Saved checkpoint to: ", model_path)
                 save(model, model_path)
+                artifact = wandb.Artifact(name=file_name, type='model checkpoint')
+                artifact.add_file(local_path=model_path)
+                wandb.run.log_artifact(artifact)
+
+    wandb.finish()
                 
 def train_batch(images, texts, model, device, criterion, optimizer):
     images, texts = images.to(device), texts.to(device)
@@ -172,6 +188,7 @@ def train_batch(images, texts, model, device, criterion, optimizer):
 def train_log(loss, example_ct, epoch):
     loss = float(loss)
     print(f"Loss after " + str(example_ct).zfill(5) + f" examples: {loss:.3f}")
+    wandb.log({"Epoch": epoch, "Example Count": example_ct, "Loss": round(loss, 3)})
     
 def save(model, path): 
     torch.save(model.state_dict(), path)

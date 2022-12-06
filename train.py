@@ -192,7 +192,7 @@ def load_clip(model_path=None, pretrained=False, context_length=77, use_cxrbert=
     
     if pretrained: 
         # load clip pre-trained model
-        model, _ = clip.load("ViT-B/32", device=device, jit=False, use_cxrbert=use_cxrbert, 
+        model, _ = clip.load("RN50", device=device, jit=False, use_cxrbert=use_cxrbert, 
                                       use_biovision=use_biovision)
         print("Loaded in pretrained model.")
     else: 
