@@ -13,6 +13,7 @@ def parse_args():
     parser.add_argument('--num_samples', type=int, default=1000)
     parser.add_argument('--true_label_path', type=str, default="../cheXpert-test-set-labels/groundtruth.csv")
     parser.add_argument('--table', action='store_true')
+    parser.add_argument('--eval_vindr', action='store_true')
     args = parser.parse_args()
         
     return args
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     
     print(f"Computing Paired AUC Bootstrap for {list(pathologies)} pathologies", end="\n\n")
     
-    y_true = make_true_labels(cxr_true_labels_path=args.true_label_path, cxr_labels=pathologies)
+    y_true = make_true_labels(cxr_true_labels_path=args.true_label_path, cxr_labels=pathologies, vindr_labels=args.eval_vindr)
     
     y_preds = [y.to_numpy() for y in y_preds]
     paired_dfs, _ = paired_bootstrap(model_names, y_preds, y_true, pathologies, n_samples=args.num_samples)

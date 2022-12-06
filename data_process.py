@@ -81,10 +81,12 @@ def dicom_img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, reso
         for idx, path in enumerate(tqdm(cxr_paths)):
             try: 
                 # read image using dicom
-                img = dicom.dcmread(str(path)).pixel_array
+                img = dicom.dcmread(str(path)).pixel_array.astype(float)
+                # scale image so it is in the range of 0 to 255
+                img = (np.maximum(img,0)/img.max()) * 255
                 # change data type
                 img = img.astype(np.uint8)
-                # convert to PIL Image object
+                # convert to PIL Image object after converting color space
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 img_pil = Image.fromarray(img)
                 # preprocess

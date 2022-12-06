@@ -15,6 +15,7 @@ def parse_args():
     parser.add_argument('--huggingface_bert_key', type=str, action='store', default='cxr')
     parser.add_argument('--image_csv_path', type=str, default='data/CheXpert/test_labels.csv')
     parser.add_argument('--results_dir', type=str, default="predictions")
+    parser.add_argument('--dataset', type=str, default="chexpert")
     args = parser.parse_args()
     
     assert args.model_path.split("/")[0] == "checkpoints", "Checkpoint must be in checkpoints folder"
@@ -27,7 +28,13 @@ def parse_args():
 def generate_predictions(config, model_paths):
     
     cxr_filepath = config.cxr_filepath
-    cxr_labels = pd.read_csv(config.cxr_labels).columns.tolist()[2:]
+    
+    if config.dataset == 'chexpert':
+        cxr_labels = pd.read_csv(config.cxr_labels).columns.tolist()[2:]
+    elif config.dataset == 'vindr':
+        cxr_labels = pd.read_csv(config.cxr_labels).columns.tolist()[1:-1]
+    else:
+        raise ValueError('Must select a valid dataset for evaluation')
    
     # PRESET variables
     cxr_pair_template = ("{}", "no {}")

@@ -262,7 +262,8 @@ def run_softmax_eval(model, loader, eval_labels: list, pair_template: tuple, con
 def make_true_labels(
     cxr_true_labels_path: str, 
     cxr_labels: List[str],
-    cutlabels: bool = True
+    cutlabels: bool = True,
+    vindr_labels = False,
 ): 
     """
     Loads in data containing the true binary labels
@@ -280,6 +281,16 @@ def make_true_labels(
     """
     # create ground truth labels
     full_labels = pd.read_csv(cxr_true_labels_path)
+    # reorder labels if dataset is vindr
+    if vindr_labels:
+        # get proper order of labels from file paths csv
+        order = pd.read_csv('data/vindr_cxr_paths.csv')['Path']
+        # filter out path and file extension to just have file names
+        order = [o.split('/')[-1].split('.')[0] for o in order]
+        # reorder full labels according to order
+        full_labels = full_labels.set_index('image_id')
+        full_labels = full_labels.loc[order]
+        full_labels = full_labels.reset_index()
     if cutlabels: 
         full_labels = full_labels.loc[:, cxr_labels]
     else: 

@@ -8,6 +8,7 @@ visionmodels/vision_pretrained/*
 results/*
 wandb/*
 vindr-cxr/*
+predictions/*
 
 .DS_Store
 
