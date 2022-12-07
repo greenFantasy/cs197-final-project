@@ -9,7 +9,8 @@ from zero_shot import make_true_labels
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_names', type=str, default="")
-    parser.add_argument('--pred_csv_paths', type=str, required=True)
+    parser.add_argument('--pred_csv_paths', type=str, required=False)
+    parser.add_argument('--pred_csv_directory', type=str, required=False)
     parser.add_argument('--num_samples', type=int, default=1000)
     parser.add_argument('--true_label_path', type=str, default="../cheXpert-test-set-labels/groundtruth.csv")
     parser.add_argument('--table', action='store_true')
@@ -21,9 +22,25 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     
-    pred_csv_paths = args.pred_csv_paths.split(",")
+    
+    if args.pred_csv_directory:
+        csv_paths = ['baseline.csv', 'biovision_locked.csv', 'biovision_unlocked.csv', 
+                        'bluebert_locked.csv', 'bluebert_unlocked.csv', 'clinicalbert_locked.csv', 
+                        'clinicalbert_unlocked.csv', 'cxrbert_locked.csv', 'cxrbert_unlocked.csv', 
+                        'medaug_locked.csv', 'medaug_unlocked.csv', 'mococxr_locked.csv', 'mococxr_unlocked.csv']
+        
+        pred_csv_paths = [args.pred_csv_directory + "/" + f for f in csv_paths]
+    
+    if args.pred_csv_paths:
+        pred_csv_paths = args.pred_csv_paths.split(",")
+    
     if args.model_names:
-        model_names = args.model_names.split(",")    
+        if args.pred_csv_directory:
+            model_names = ['baseline', 'biovision_locked', 'biovision_unlocked', 'bluebert_locked', 
+                        'bluebert_unlocked', 'clinicalbert_locked', 'clinicalbert_unlocked', 'cxrbert_locked', 
+                        'cxrbert_unlocked', 'medaug_locked', 'medaug_unlocked', 'mococxr_locked', 'mococxr_unlocked']  
+        else:
+            model_names = args.model_names.split(",")
     else:
         model_names = [p.split("/")[-1].split(".")[0] for p in pred_csv_paths]
     assert len(model_names) == len(pred_csv_paths)
@@ -59,11 +76,11 @@ if __name__ == "__main__":
             assert len(lowers) == len(means), "Mean and lower quantile should have same length"
             data[i] = [f"{m:.3f} ({l:.3f}, {u:.3f})" for m, l, u in zip(means, lowers, uppers)]
         table = pd.DataFrame(columns=pathologies, data=data)
-        table["Configuration"] = model_names
+        table["Configuration"] = [name.split("_")[0] for name in model_names]
         table["U/L"] = ['L' if (name.split("_")[-1] == 'locked') else 'U' for name in model_names]
         table["Tower"] = ['Text' if (name.split("_")[0][-4:] == 'bert') else 'Image' for name in model_names]
-        #pathologies = ["Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"] # chexpert competition pathologies
-        table = table[[ *(["Tower"] + ["Configuration"] + ["U/L"] + list(pathologies)) ]]
+        pathologies = ["Atelectasis", "Cardiomegaly", "Consolidation", "Pleural effusion"] # chexpert competition pathologies
+        table = table[[ *(["Tower"] + ["Configuration"] + ["U/L"] + list(pathologies)) ]].sort_values(by=["Tower", "Configuration", "U/L"])
         print('Full Table:')
         print(table.iloc[:, :].to_latex(index=False))
         print('Split Table:')
