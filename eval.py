@@ -278,35 +278,25 @@ def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, l
 def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures', use_vindr=False):
     pathologies = df1.columns
     num_pathologies = len(pathologies)
-    num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
-    fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(15, 20))
-    fig.subplots_adjust(hspace=0.5, wspace=0.5)
     diffs = df1.to_numpy() - df2.to_numpy()
+    fig = plt.figure(figsize=(7, 7))
     for idx, pathology in enumerate(pathologies):
-        row = idx // num_cols
-        col = idx % num_cols
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
         lower = np.nanquantile(pathology_diffs, 0.025)
         upper = np.nanquantile(pathology_diffs, 0.975)
-        perc = (pathology_diffs > 0).sum() / len(pathology_diffs) * 100
-        avg = pathology_diffs.mean()
-        if lower < 0 < upper:
-            color = "orange"
-        elif 0 <= lower:
-            color = "green"
-        else:
-            color = "red"
-        
-        sns.distplot(pathology_diffs, ax=axs[row, col], color=color)
-        title = f"{pathology[:-4]} AUC"
-        axs[row, col].set_title(r"\textbf{" + title + "}" + f"\n Percentile Above Zero: {perc:.2f}% \n Mean: {float(pathology_diffs.mean()):.4f}")
-        axs[row, col].axvline(0, 0, 1, color="black")
-        axs[row, col].axvline(upper, 0, 1, color="red")
-        axs[row, col].axvline(lower, 0, 1, color="red")
-    axs[-1,-1].set_axis_off()
-    axs[-1,-2].set_axis_off()
-    dataset = 'chexpert' if not use_vindr else 'vindr'
-    fig.suptitle(r"\textbf{" + f"({model1_name} - {model2_name}) {dataset} {metric} Paired Bootstrap" + "}", fontsize=25)
+        mean = np.nanmean(pathology_diffs)
+        plt.errorbar(idx, 
+                     mean, 
+                     np.array([mean - lower, upper - mean]).reshape(2, 1), 
+                     fmt='o',
+                     markersize=8,
+                     capsize=10)
+    plt.axhline(0)
+    plt.xlabel("Pathologies")
+    plt.ylabel("AUC Difference")
+    plt.xticks(np.arange(num_pathologies), pathologies, rotation=60)
+    dataset = 'vindr' if use_vindr else 'chexpert'
+    plt.title(f"{model1_name} - {model2_name} {dataset} {metric} Paired Bootstrap")
     save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{dataset}-{metric}-Paired-Bootstrap.png")
-    fig.savefig(save_path) 
-    print(f"Saving figure to {save_path}")
+    print("Saving: ", save_path)
+    fig.savefig(save_path)
