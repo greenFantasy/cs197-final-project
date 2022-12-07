@@ -60,8 +60,11 @@ if __name__ == "__main__":
             data[i] = [f"{m:.3f} ({l:.3f}, {u:.3f})" for m, l, u in zip(means, lowers, uppers)]
         table = pd.DataFrame(columns=pathologies, data=data)
         table["Configuration"] = model_names
-        table = table[[ *(["Configuration"] + list(pathologies)) ]]
-        split_point = 7
-        print(table.iloc[:, :split_point].to_latex(index=False))
-        print(table.iloc[:, split_point:].to_latex(index=False))
+        table["U/L"] = ['L' if (name.split("_")[-1] == 'locked') else 'U' for name in model_names]
+        table["Tower"] = ['Text' if (name.split("_")[0][-4:] == 'bert') else 'Image' for name in model_names]
+        pathologies = ["Cardiomegaly", "Lung Opacity", "Lung Lesion", "Edema", "Consolidation"]
+        table = table[[ *(["Tower"] + ["Configuration"] + ["U/L"] + list(pathologies)) ]]
+        split_num= 7
+        len(table.columns) / split_num
+        print(table.iloc[:, :].to_latex(index=False))
         table.to_csv("results/table.csv", index=False)
