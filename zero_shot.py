@@ -8,6 +8,7 @@ import h5py
 import matplotlib.pyplot as plt
 from typing import List, Tuple
 from pathlib import Path
+import pydicom as dicom
 
 import torch
 from torch.utils import data
@@ -16,7 +17,7 @@ import torch.nn as nn
 from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
 from transformers import AutoTokenizer
 
-from health_multimodal.image.data.io import load_image
+from health_multimodal.image.data.io import load_image, remap_to_uint8
 from health_multimodal.image.data.transforms import create_chest_xray_transform_for_inference
 
 import sklearn
@@ -44,11 +45,17 @@ class CXRTestDataset(data.Dataset):
         img_path: str, 
         transform = None, 
         use_biovision = False,
+        use_vindr = False,
     ):
         super().__init__()
         self.use_biovision = use_biovision
+        self.use_vindr = use_vindr
         if not self.use_biovision:
             self.img_dset = h5py.File(img_path, 'r')['cxr']
+        elif self.use_vindr:
+            # self.img_dset = h5py.File(img_path, 'r')['cxr']
+            self.img_dset = pd.read_csv(img_path)['Path'].tolist()
+            assert len(self.img_dset) == 3000
         else:
             self.img_dset = [os.path.join(os.path.dirname(img_path), p) for p in pd.read_csv(img_path)['Path'].tolist() if "view1" in p]
             assert len(self.img_dset) == 500
@@ -66,6 +73,11 @@ class CXRTestDataset(data.Dataset):
             img = np.expand_dims(img, axis=0)
             img = np.repeat(img, 3, axis=0)
             img = torch.from_numpy(img) # torch, (320, 320)
+        elif self.use_vindr:
+            img_path = img
+            img = dicom.dcmread(img_path).pixel_array
+            img = remap_to_uint8(img)
+            img = Image.fromarray(img).convert("L")
         else:
             img_path = img
             if isinstance(img_path, str):
@@ -73,6 +85,11 @@ class CXRTestDataset(data.Dataset):
             img = load_image(img_path)
         
         if self.transform:
+            # if self.use_biovision and self.use_vindr:
+            #     t = create_chest_xray_transform_for_inference(224, 224)
+            #     img = t(img)
+            # else:
+            #     img = self.transform(img)
             img = self.transform(img)
             
         sample = {'img': img}
@@ -319,6 +336,7 @@ def make(
     use_huggingface_bert=False,
     huggingface_bert_key='cxr',
     image_csv_path=None,
+    use_vindr=False,
 ):
     """
     FUNCTION: make
@@ -368,7 +386,8 @@ def make(
     torch_dset = CXRTestDataset(
         img_path=cxr_filepath if not use_biovision else image_csv_path,
         transform=transform, 
-        use_biovision=use_biovision
+        use_biovision=use_biovision,
+        use_vindr=use_vindr
     )
     loader = torch.utils.data.DataLoader(torch_dset, shuffle=False)
     
@@ -385,7 +404,8 @@ def ensemble_models(
     save_name: str = None,
     use_huggingface_bert: bool = False,
     huggingface_bert_key: str = 'cxr',
-    image_csv_path = None
+    image_csv_path = None,
+    use_vindr=False
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
     """
     Given a list of `model_paths`, ensemble model and return
@@ -407,7 +427,8 @@ def ensemble_models(
             cxr_filepath=cxr_filepath, 
             use_huggingface_bert=use_huggingface_bert,
             huggingface_bert_key=huggingface_bert_key,
-            image_csv_path=image_csv_path
+            image_csv_path=image_csv_path,
+            use_vindr=use_vindr
         ) 
         
         # path to the cached prediction
