@@ -45,7 +45,7 @@ if __name__ == "__main__":
     if len(paired_dfs) == 2:
         model1_name = model_names[0]
         model2_name = model_names[1]
-        plot_paired_bootstrap(model1_name, model2_name, paired_dfs[model1_name], paired_dfs[model2_name], use_vinder=args.eval_vindr)
+        plot_paired_bootstrap(model1_name, model2_name, paired_dfs[model1_name], paired_dfs[model2_name], use_vindr=args.eval_vindr)
     else:
         print(f"Not plotting, number of things to compare is {len(paired_dfs)}")
         
