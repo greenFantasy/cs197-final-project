@@ -99,19 +99,26 @@ class CLIPImageEncoder(ImageEncoder):
 class CLIPImageModel(ImageModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        joint_feature_size = 128
+        self.joint_feature_size = 128
         clip_vision = load()
         self.encoder = CLIPImageEncoder(clip_resnet50=clip_vision, img_model_type="resnet50")
         self.feature_size = 1024
-        self.use_MLP = False
+        self.use_MLP = True
+        self.use_1x1_convs = True
+        self.set_MLP(self.use_MLP, self.use_1x1_convs)
+    
+    def set_MLP(self, use_MLP, use_1x1_convs):
+        self.use_MLP = use_MLP
+        self.use_1x1_convs = use_1x1_convs
+        del self.projector
         if self.use_MLP:
-            self.projector = MLP(input_dim=self.feature_size, output_dim=joint_feature_size,
-                                    hidden_dim=joint_feature_size, use_1x1_convs=True)
+            self.projector = MLP(input_dim=self.feature_size, output_dim=self.joint_feature_size,
+                                    hidden_dim=self.joint_feature_size, use_1x1_convs=self.use_1x1_convs)
         else:
             print("Using the new linear projector for CLIP instead")
-            self.projector = torch.nn.Linear(self.feature_size, joint_feature_size, bias=False)
+            self.projector = torch.nn.Linear(self.feature_size, self.joint_feature_size, bias=False)
             torch.nn.init.normal_(self.projector.weight, std=self.feature_size ** -0.5)
-        self.projector = self.projector.to(self.encoder.encoder.conv1.weight.dtype)
+        self.projector = self.projector.to(self.encoder.encoder.conv1.weight.device).to(self.encoder.encoder.conv1.weight.dtype)
     
     def get_dtype(self):
         return list(self.projector.parameters())[0].dtype
@@ -119,11 +126,13 @@ class CLIPImageModel(ImageModel):
     def forward(self, x):
         with torch.set_grad_enabled(not self.freeze_encoder):
             patch_x, pooled_x = self.encoder(x, return_patch_embeddings=True)
-            if self.use_MLP:
+            if self.use_MLP and self.use_1x1_convs:
                 patch_x = patch_x.unsqueeze(-1).unsqueeze(-1)
                 projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
                 projected_global_embedding = torch.mean(projected_patch_embeddings, dim=(2, 3))
             else:
+                print(patch_x.shape)
+                print(self.projector.model[0].weight.shape)
                 projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
                 projected_global_embedding = projected_patch_embeddings
 

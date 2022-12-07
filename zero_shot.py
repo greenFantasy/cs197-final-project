@@ -110,8 +110,18 @@ def load_clip(image_tower_type, model_path, pretrained=False, context_length=77,
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
     except: 
-        print("Argument error. Set pretrained = True.", sys.exc_info()[0])
-        raise
+        if image_tower_type=="clip":
+            try:
+                print("Now trying a linear layer instead of a conv2d layer")
+                model.visual.set_MLP(True, False)
+                model.load_state_dict(torch.load(model_path, map_location=device))
+            except:
+                print("Now trying a visual projection")
+                model.visual.set_MLP(False, True)
+                model.load_state_dict(torch.load(model_path, map_location=device))
+        else:
+            print("Argument error. Set pretrained = True.", sys.exc_info()[0])
+            raise
     return model
 
 def zeroshot_classifier(classnames, templates, model, context_length=77, use_huggingface_bert=False, 
