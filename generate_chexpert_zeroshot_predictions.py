@@ -52,13 +52,15 @@ def generate_predictions(config, model_paths):
         cache_dir=cache_dir,
         use_huggingface_bert=use_huggingface_bert,
         huggingface_bert_key=huggingface_bert_key,
-        image_csv_path=image_csv_path
+        image_csv_path=image_csv_path,
+        use_vindr=config.dataset=='vindr'
     )
     
     for model_path, pred in zip(model_paths, predictions):
         split = model_path.split("/")
         split[0] = config.results_dir
         split[-1] = split[-1].split(".")[0]
+        split[-1] = config.dataset + '/' + split[-1]
         save_name_np = "/".join(split)
         split[-1] = split[-1] + ".csv"
         save_name_csv = "/".join(split)

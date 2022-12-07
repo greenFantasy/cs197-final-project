@@ -264,7 +264,7 @@ def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, l
     # cis = {name: compute_cis(bs) for name, bs in boot_stats.items()}
     return dfs, None # , cis
 
-def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures'):
+def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures', use_vindr=False):
     pathologies = df1.columns
     num_pathologies = len(pathologies)
     num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
@@ -276,7 +276,8 @@ def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
         axs[row, col].hist(pathology_diffs)
         axs[row, col].set_title(f"{pathology} mean diff: {float(pathology_diffs.mean()):.4f}")
-    fig.suptitle(f"{model1_name} - {model2_name} {metric} Paired Bootstrap")
-    save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{metric}-Paired-Bootstrap.png")
+    dataset = 'chexpert' if not use_vindr else 'vindr'
+    fig.suptitle(f"{model1_name} - {model2_name} {dataset} {metric} Paired Bootstrap")
+    save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{dataset}-{metric}-Paired-Bootstrap.png")
     fig.savefig(save_path) 
     print(f"Saving figure to {save_path}")
