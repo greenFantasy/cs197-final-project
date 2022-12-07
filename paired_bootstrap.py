@@ -62,9 +62,16 @@ if __name__ == "__main__":
         table["Configuration"] = model_names
         table["U/L"] = ['L' if (name.split("_")[-1] == 'locked') else 'U' for name in model_names]
         table["Tower"] = ['Text' if (name.split("_")[0][-4:] == 'bert') else 'Image' for name in model_names]
-        pathologies = ["Cardiomegaly", "Lung Opacity", "Lung Lesion", "Edema", "Consolidation"]
+        #pathologies = ["Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"] # chexpert competition pathologies
         table = table[[ *(["Tower"] + ["Configuration"] + ["U/L"] + list(pathologies)) ]]
-        split_num= 7
-        len(table.columns) / split_num
+        print('Full Table:')
         print(table.iloc[:, :].to_latex(index=False))
+        print('Split Table:')
+        start_ind = 0
+        split_num = 6 # number of columns in first row
+        num_cols = len(table.columns)
+        while start_ind < num_cols:
+            print(table.iloc[:,start_ind:split_num].to_latex(index=False))
+            start_ind = split_num
+            split_num += 5 # number of columns in subsequent rows
         table.to_csv("results/table.csv", index=False)
