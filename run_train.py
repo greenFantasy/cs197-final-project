@@ -37,7 +37,6 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-# @hydra.main(version_base=None, config_path="configs", config_name="defaults.yaml")
 def model_pipeline(config): #, verbose=0): 
     
     print(config, flush=True)
