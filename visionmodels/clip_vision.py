@@ -103,7 +103,7 @@ class CLIPImageModel(ImageModel):
         clip_vision = load()
         self.encoder = CLIPImageEncoder(clip_resnet50=clip_vision, img_model_type="resnet50")
         self.feature_size = 1024
-        self.use_MLP = False
+        self.use_MLP = True
         if self.use_MLP:
             self.projector = MLP(input_dim=self.feature_size, output_dim=joint_feature_size,
                                     hidden_dim=joint_feature_size, use_1x1_convs=True)

@@ -9,6 +9,7 @@ results/*
 wandb/*
 vindr-cxr/*
 predictions/*
+!predictions/final-checkpoints/
 
 .DS_Store
 
