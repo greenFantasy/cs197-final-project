@@ -106,7 +106,7 @@ class CLIPImageModel(ImageModel):
         self.use_MLP = True
         if self.use_MLP:
             self.projector = MLP(input_dim=self.feature_size, output_dim=joint_feature_size,
-                                    hidden_dim=joint_feature_size, use_1x1_convs=False)
+                                    hidden_dim=joint_feature_size, use_1x1_convs=True)
         else:
             print("Using the new linear projector for CLIP instead")
             self.projector = torch.nn.Linear(self.feature_size, joint_feature_size, bias=False)
@@ -120,9 +120,9 @@ class CLIPImageModel(ImageModel):
         with torch.set_grad_enabled(not self.freeze_encoder):
             patch_x, pooled_x = self.encoder(x, return_patch_embeddings=True)
             if self.use_MLP:
-                # patch_x = patch_x.unsqueeze(-1).unsqueeze(-1)
+                patch_x = patch_x.unsqueeze(-1).unsqueeze(-1)
                 projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
-                projected_global_embedding = projected_patch_embeddings # torch.mean(projected_patch_embeddings, dim=(2, 3))
+                projected_global_embedding = torch.mean(projected_patch_embeddings, dim=(2, 3))
             else:
                 projected_patch_embeddings = self.projector(patch_x.to(self.get_dtype()))
                 projected_global_embedding = projected_patch_embeddings
