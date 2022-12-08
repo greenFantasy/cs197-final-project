@@ -1,2 +1,0 @@
-use_biovision: True
-img_path_list: 'data/cxr_paths.csv'

@@ -22,10 +22,10 @@ You can find information about the VinDr-CXR dataset here: https://www.nature.co
 
 We will work under the assumption that once the data has been downloaded, it is found within the `vindr-cxr/{version}` folder. In this case the dataset version is 1.0.0 so the data is found in the `vindr-cxr/1.0.0` folder. From there the structure will be as shown on PhysioNet.
 
-We will then need to process the dataset with the following command.
+If you want to create an h5 file, we will then need to process the dataset with the following command. This is no longer a requirement since we process the data in a different way for the new model architecture and evaluation (see main README file).
 
 ```
 python run_preprocess.py --csv_out_path data/vindr_cxr_paths.csv --cxr_out_path data/vindr_cxr.h5 --dataset_type vindr --chest_x_ray_path vindr-cxr/1.0.0/test
 ```
 
-This will create a `vindr_cxr.h5` file in the `data` folder.
+This will create a `vindr_cxr.h5` file in the `data` folder, along with a file that contains image paths.
