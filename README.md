@@ -170,3 +170,5 @@ The `paired_bootstrap.py` file generates AUC results after the predictions have 
 `--table`, Flag to print out a latex table of the results.
 
 `--eval_vindr`, Flag to indicate the results are for the VinDr dataset (leaving this out indicates CheXpert).
+
+If exactly two models are included in the arguments, then graphs for paired bootstrap AUC results will be created.
