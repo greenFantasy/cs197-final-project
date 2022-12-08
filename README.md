@@ -65,7 +65,7 @@ python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impress
 In order to run the model training process with the CXR-BERT model for the text stack, include the following at the end of the command.
 
 ```
-locking.use_cxrbert=True
+locking.use_huggingface_bert=True
 ```
 
 In order to run the model training process with the ViTMAE image stack you need to include two flags. The first is a boolean flag to indicate you want to use it and the second is a path for the model checkpoint. An example of these flags is as follows.
@@ -92,21 +92,21 @@ A combination of the above parameter flags may be used to achieve the appropriat
 # uu
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv
 # uU
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_huggingface_bert
 # uL
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_cxrbert --lock_text
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_huggingface_bert --lock_text
 # Uu
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH}
 # Lu
 python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision
 # UU
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_cxrbert
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_huggingface_bert
 # LU
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_cxrbert
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_huggingface_bert
 # UL
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_cxrbert --lock_text
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --use_huggingface_bert --lock_text
 # LL
-python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_cxrbert --lock_text
+python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impressions.csv --use_vitmae --vitmae_path {ViTMAE_CHECKPOINT_PATH} --lock_vision --use_huggingface_bert --lock_text
 ```
 
 # Zero-shot Dataset Downloads
@@ -129,6 +129,6 @@ The zeroshot_analysis.py python file provides bootstrapped results for a specifi
 
 `--model_dir`, Directory path for model pointers that need to be evaluated.
 
-`--use_cxrbert`, Boolean flag for indicating model type.
+`--use_huggingface_bert`, Boolean flag for indicating model type.
 
 `--results_dir`, Location for storing pandas dataframes as CSVs for bootstrapped results.
