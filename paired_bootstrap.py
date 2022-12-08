@@ -13,6 +13,7 @@ def parse_args():
     parser.add_argument('--num_samples', type=int, default=1000)
     parser.add_argument('--true_label_path', type=str, default="../cheXpert-test-set-labels/groundtruth.csv")
     parser.add_argument('--table', action='store_true')
+    parser.add_argument('--eval_vindr', action='store_true')
     args = parser.parse_args()
         
     return args
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     
     print(f"Computing Paired AUC Bootstrap for {list(pathologies)} pathologies", end="\n\n")
     
-    y_true = make_true_labels(cxr_true_labels_path=args.true_label_path, cxr_labels=pathologies)
+    y_true = make_true_labels(cxr_true_labels_path=args.true_label_path, cxr_labels=pathologies, vindr_labels=args.eval_vindr)
     
     y_preds = [y.to_numpy() for y in y_preds]
     paired_dfs, _ = paired_bootstrap(model_names, y_preds, y_true, pathologies, n_samples=args.num_samples)
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     if len(paired_dfs) == 2:
         model1_name = model_names[0]
         model2_name = model_names[1]
-        plot_paired_bootstrap(model1_name, model2_name, paired_dfs[model1_name], paired_dfs[model2_name])
+        plot_paired_bootstrap(model1_name, model2_name, paired_dfs[model1_name], paired_dfs[model2_name], use_vindr=args.eval_vindr)
     else:
         print(f"Not plotting, number of things to compare is {len(paired_dfs)}")
         
@@ -59,8 +60,18 @@ if __name__ == "__main__":
             data[i] = [f"{m:.3f} ({l:.3f}, {u:.3f})" for m, l, u in zip(means, lowers, uppers)]
         table = pd.DataFrame(columns=pathologies, data=data)
         table["Configuration"] = model_names
-        table = table[[ *(["Configuration"] + list(pathologies)) ]]
-        split_point = 7
-        print(table.iloc[:, :split_point].to_latex(index=False))
-        print(table.iloc[:, split_point:].to_latex(index=False))
+        table["U/L"] = ['L' if (name.split("_")[-1] == 'locked') else 'U' for name in model_names]
+        table["Tower"] = ['Text' if (name.split("_")[0][-4:] == 'bert') else 'Image' for name in model_names]
+        #pathologies = ["Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"] # chexpert competition pathologies
+        table = table[[ *(["Tower"] + ["Configuration"] + ["U/L"] + list(pathologies)) ]]
+        print('Full Table:')
+        print(table.iloc[:, :].to_latex(index=False))
+        print('Split Table:')
+        start_ind = 0
+        split_num = 6 # number of columns in first row
+        num_cols = len(table.columns)
+        while start_ind < num_cols:
+            print(table.iloc[:,start_ind:split_num].to_latex(index=False))
+            start_ind = split_num
+            split_num += 5 # number of columns in subsequent rows
         table.to_csv("results/table.csv", index=False)

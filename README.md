@@ -111,7 +111,7 @@ python run_train.py --cxr_filepath data/cxr.h5 --txt_filepath data/mimic_impress
 
 # Zero-shot Dataset Downloads
 
-All information to setup and download cheXpert and Padchest datasets located in `data/README.md`.
+All information to setup and download CheXpert, VinDr-CXR, and Padchest datasets located in `data/README.md`.
 
 # Pre-processing
 

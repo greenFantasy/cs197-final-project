@@ -12,6 +12,7 @@ import h5py
 import cv2
 from typing import *
 from pathlib import Path
+import pydicom as dicom
 
 import torch
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
@@ -59,6 +60,33 @@ def img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, resolution
                 # read image using cv2
                 img = cv2.imread(str(path))
                 # convert to PIL Image object
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img_pil = Image.fromarray(img)
+                # preprocess
+                img = preprocess(img_pil, desired_size=resolution)     
+                img_dset[idx] = img
+            except Exception as e: 
+                failed_images.append((path, e))
+    print(f"{len(failed_images)} / {len(cxr_paths)} images failed to be added to h5.", failed_images)
+    
+def dicom_img_to_hdf5(cxr_paths: List[Union[str, Path]], out_filepath: str, resolution=320): 
+    """
+    Convert directory of dicom images into a .h5 file given paths to all 
+    images. 
+    """
+    dset_size = len(cxr_paths)
+    failed_images = []
+    with h5py.File(out_filepath,'w') as h5f:
+        img_dset = h5f.create_dataset('cxr', shape=(dset_size, resolution, resolution))    
+        for idx, path in enumerate(tqdm(cxr_paths)):
+            try: 
+                # read image using dicom
+                img = dicom.dcmread(str(path)).pixel_array.astype(float)
+                # scale image so it is in the range of 0 to 255
+                img = (np.maximum(img,0)/img.max()) * 255
+                # change data type
+                img = img.astype(np.uint8)
+                # convert to PIL Image object after converting color space
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 img_pil = Image.fromarray(img)
                 # preprocess

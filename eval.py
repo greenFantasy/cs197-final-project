@@ -22,6 +22,10 @@ from sklearn.utils import resample
 
 import scipy
 import scipy.stats
+import seaborn as sns
+
+from matplotlib import rc
+rc('text', usetex=True)
 
 import sys
 sys.path.append('../..')
@@ -229,6 +233,13 @@ def bootstrap(y_pred, y_true, cxr_labels, n_samples=1000, label_idx_map=None):
     boot_stats = pd.concat(boot_stats) # pandas array of evaluations for each sample
     return boot_stats, compute_cis(boot_stats)
 
+def mean_confidence_interval(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return m, m-h, m+h
+
 def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, label_idx_map=None): 
     '''
     This function will randomly sample with replacement 
@@ -264,19 +275,28 @@ def paired_bootstrap(model_names, y_preds, y_true, cxr_labels, n_samples=1000, l
     # cis = {name: compute_cis(bs) for name, bs in boot_stats.items()}
     return dfs, None # , cis
 
-def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures'):
+def plot_paired_bootstrap(model1_name, model2_name, df1, df2, metric="AUC", num_cols=3, save_dir='figures', use_vindr=False):
     pathologies = df1.columns
     num_pathologies = len(pathologies)
-    num_rows = num_pathologies // num_cols + (1 if num_pathologies % num_cols != 0 else 0)
-    fig, axs = plt.subplots(ncols=num_cols, nrows=num_rows, figsize=(15, 20))
     diffs = df1.to_numpy() - df2.to_numpy()
+    fig = plt.figure(figsize=(7, 7))
     for idx, pathology in enumerate(pathologies):
-        row = idx // num_cols
-        col = idx % num_cols
         pathology_diffs = diffs[:, idx][~np.isnan(diffs[:, idx])]
-        axs[row, col].hist(pathology_diffs)
-        axs[row, col].set_title(f"{pathology} mean diff: {float(pathology_diffs.mean()):.4f}")
-    fig.suptitle(f"{model1_name} - {model2_name} {metric} Paired Bootstrap")
-    save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{metric}-Paired-Bootstrap.png")
-    fig.savefig(save_path) 
-    print(f"Saving figure to {save_path}")
+        lower = np.nanquantile(pathology_diffs, 0.025)
+        upper = np.nanquantile(pathology_diffs, 0.975)
+        mean = np.nanmean(pathology_diffs)
+        plt.errorbar(idx, 
+                     mean, 
+                     np.array([mean - lower, upper - mean]).reshape(2, 1), 
+                     fmt='o',
+                     markersize=8,
+                     capsize=10)
+    plt.axhline(0)
+    plt.xlabel("Pathologies")
+    plt.ylabel("AUC Difference")
+    plt.xticks(np.arange(num_pathologies), pathologies, rotation=60)
+    dataset = 'vindr' if use_vindr else 'chexpert'
+    plt.title(f"{model1_name} - {model2_name} {dataset} {metric} Paired Bootstrap")
+    save_path = os.path.join(save_dir, f"{model1_name}-{model2_name}-{dataset}-{metric}-Paired-Bootstrap.png")
+    print("Saving: ", save_path)
+    fig.savefig(save_path)
