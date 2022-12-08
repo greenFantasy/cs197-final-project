@@ -14,7 +14,7 @@ import torch
 from torch.utils import data
 from tqdm import tqdm
 import torch.nn as nn
-from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode
+from torchvision.transforms import Compose, Normalize, Resize, InterpolationMode, CenterCrop
 from transformers import AutoTokenizer
 
 from health_multimodal.image.data.io import load_image, remap_to_uint8
@@ -53,7 +53,6 @@ class CXRTestDataset(data.Dataset):
         if not self.use_biovision:
             self.img_dset = h5py.File(img_path, 'r')['cxr']
         elif self.use_vindr:
-            # self.img_dset = h5py.File(img_path, 'r')['cxr']
             self.img_dset = pd.read_csv(img_path)['Path'].tolist()
             assert len(self.img_dset) == 3000
         else:
@@ -74,10 +73,7 @@ class CXRTestDataset(data.Dataset):
             img = np.repeat(img, 3, axis=0)
             img = torch.from_numpy(img) # torch, (320, 320)
         elif self.use_vindr:
-            img_path = img
-            img = dicom.dcmread(img_path).pixel_array
-            img = remap_to_uint8(img)
-            img = Image.fromarray(img).convert("L")
+            img = Image.fromarray(img)
         else:
             img_path = img
             if isinstance(img_path, str):
@@ -85,15 +81,141 @@ class CXRTestDataset(data.Dataset):
             img = load_image(img_path)
         
         if self.transform:
-            # if self.use_biovision and self.use_vindr:
-            #     t = create_chest_xray_transform_for_inference(224, 224)
-            #     img = t(img)
-            # else:
-            #     img = self.transform(img)
             img = self.transform(img)
             
         sample = {'img': img}
     
+        return sample
+    
+class VinDrTestDataset(data.Dataset):
+    """
+    Test dataset object for VinDr-CXR data
+    """
+    def __init__(self, 
+                 imgpath,
+                 csvpath,
+                 transform=None,
+                 seed=0,
+                 use_biovision=False
+                 ) -> None:
+        super().__init__()
+
+        np.random.seed(seed)  # Reset the seed so all runs are the same.
+        self.imgpath = imgpath
+        self.csvpath = csvpath
+        self.transform = transform
+        self.use_biovision = use_biovision
+
+        # Load data
+        self.csv = pd.read_csv(self.csvpath).reset_index()
+    
+    def __len__(self):
+        return len(self.csv.index)
+        
+    def __getitem__(self, idx):
+
+        imgid = self.csv['image_id'].iloc[idx]
+        img_path = os.path.join(self.imgpath, imgid + ".dicom")
+
+        try:
+            import pydicom
+        except ImportError as e:
+            raise Exception("Please install pydicom to work with this dataset")
+        from pydicom.pixel_data_handlers.util import apply_modality_lut
+        dicom_obj = pydicom.filereader.dcmread(img_path)
+        img = apply_modality_lut(dicom_obj.pixel_array, dicom_obj)
+        img = pydicom.pixel_data_handlers.apply_windowing(img, dicom_obj)
+
+        # Photometric Interpretation to see if the image needs to be inverted
+        mode = dicom_obj[0x28, 0x04].value
+        bitdepth = dicom_obj[0x28, 0x101].value
+        # print(f"Bitdepth: {bitdepth}, Max: {img.max()}, Min: {img.min()}")
+
+        # hack!
+        if img.max() < 256:
+            bitdepth = 8
+
+        if mode == "MONOCHROME1":
+            # print("Flipping image because monochrome 1")
+            img = -1 * img + 2**float(bitdepth)
+        elif mode == "MONOCHROME2":
+            # print("Not flipping for monochrome 2")
+            pass
+        else:
+            raise Exception("Unknown Photometric Interpretation mode")
+
+        # img = self.normalize(img, maxval=2**float(bitdepth), reshape=True)
+        
+        img = (np.maximum(img,0)/ (2 ** float(bitdepth)) ) * 255 
+        
+        if len(img.shape) > 2:
+            img = img[:, :, 0]
+        img = img[None, :, :]
+        
+        if not self.use_biovision:
+            img = np.repeat(img, 3, axis=0)
+            img = torch.from_numpy(img) # torch, (320, 320)
+        else:
+            img = img[0]
+            img = remap_to_uint8(img)
+            img = Image.fromarray(img).convert("L")
+    
+        img = self.apply_transforms(img, self.transform)
+
+        sample = {'img': img}
+
+        return sample
+    
+    def normalize(self, img, maxval, reshape=False):
+        """Scales images to be roughly [-1024 1024]."""
+
+        if img.max() > maxval:
+            raise Exception("max image value ({}) higher than expected bound ({}).".format(img.max(), maxval))
+
+        img = (2 * (img.astype(np.float32) / maxval) - 1.) * 1024
+
+        if reshape:
+            # Check that images are 2D arrays
+            if len(img.shape) > 2:
+                img = img[:, :, 0]
+            if len(img.shape) < 2:
+                print("error, dimension lower than 2 for image")
+
+            # add color channel
+            img = img[None, :, :]
+
+        return img
+    
+    def apply_transforms(self, img, transform, seed=None):
+        """Applies transforms to the image and masks.
+        The seeds are set so that the transforms that are applied
+        to the image are the same that are applied to each mask.
+        This way data augmentation will work for segmentation or 
+        other tasks which use masks information.
+        """
+
+        if seed is None:
+            MAX_RAND_VAL = 2147483647
+            seed = np.random.randint(MAX_RAND_VAL)
+
+        if transform is not None:
+            import random
+            random.seed(seed)
+            torch.random.manual_seed(seed)
+            img = transform(img)
+
+        return img
+    
+class FastVinDrTestDataset(data.Dataset):
+    def __init__(self, path_to_tensor):
+        self.imgs = torch.load(path_to_tensor)
+    
+    def __len__(self):
+        return self.imgs.shape[0]
+    
+    def __getitem__(self, idx):
+        img = self.imgs[idx]
+        sample = {'img': img}
         return sample
 
 def load_clip(image_tower_type, model_path, pretrained=False, context_length=77, use_huggingface_bert=False, huggingface_bert_key='cxr'): 
@@ -126,9 +248,10 @@ def load_clip(image_tower_type, model_path, pretrained=False, context_length=77,
         model, _ = clip.load("RN50", image_tower_type, device=device, jit=False, use_huggingface_bert=use_huggingface_bert, huggingface_bert_key=huggingface_bert_key) 
     try: 
         model.load_state_dict(torch.load(model_path, map_location=device))
-    except: 
+    except Exception as e: 
         print("Argument error. Set pretrained = True.", sys.exc_info()[0])
-        raise
+        # print(e)
+        # raise e
     return model
 
 def zeroshot_classifier(classnames, templates, model, context_length=77, use_huggingface_bert=False, 
@@ -298,16 +421,6 @@ def make_true_labels(
     """
     # create ground truth labels
     full_labels = pd.read_csv(cxr_true_labels_path)
-    # reorder labels if dataset is vindr
-    if vindr_labels:
-        # get proper order of labels from file paths csv
-        order = pd.read_csv('data/vindr_cxr_paths.csv')['Path']
-        # filter out path and file extension to just have file names
-        order = [o.split('/')[-1].split('.')[0] for o in order]
-        # reorder full labels according to order
-        full_labels = full_labels.set_index('image_id')
-        full_labels = full_labels.loc[order]
-        full_labels = full_labels.reset_index()
     if cutlabels: 
         full_labels = full_labels.loc[:, cxr_labels]
     else: 
@@ -377,33 +490,39 @@ def make(
             # resize to input resolution of pretrained clip model
             input_resolution = 224
             transformations.append(Resize(input_resolution, interpolation=InterpolationMode.BICUBIC))
+            transformations.append(CenterCrop(input_resolution))
         transform = Compose(transformations)
     else:
         transform = get_biovil_transform()
-        print(f"Using BioViL transforms: {transform}")
+    print(f"Using transforms: {transform}")
     
     # create dataset
-    torch_dset = CXRTestDataset(
-        img_path=cxr_filepath if not use_biovision else image_csv_path,
-        transform=transform, 
-        use_biovision=use_biovision,
-        use_vindr=use_vindr
-    )
-    loader = torch.utils.data.DataLoader(torch_dset, shuffle=False)
+    if use_vindr:
+        path = f'data/{"biovision_" if use_biovision else ""}vindr_processed.pt'
+        torch_dset = FastVinDrTestDataset(path)
+        print('Created FastVinDrTestDataset')
+    else:
+        torch_dset = CXRTestDataset(
+            img_path=cxr_filepath if not use_biovision else image_csv_path,
+            transform=transform, 
+            use_biovision=use_biovision,
+            use_vindr=use_vindr
+        )
+    loader = torch.utils.data.DataLoader(torch_dset, shuffle=False, num_workers=8)
     
     return model, loader
 
 ## Run the model on the data set using ensembled models
 def ensemble_models(
-    image_tower_type: str, # Only supports one image tower type for the entire ensemble
+    image_tower_types: List[str], # Only supports one image tower type for the entire ensemble
     model_paths: List[str], 
     cxr_filepath: str, 
     cxr_labels: List[str], 
     cxr_pair_template: Tuple[str], 
     cache_dir: str = None, 
     save_name: str = None,
-    use_huggingface_bert: bool = False,
-    huggingface_bert_key: str = 'cxr',
+    use_huggingface_berts: List[bool] = [False],
+    huggingface_bert_keys: List[str] = ['cxr'],
     image_csv_path = None,
     use_vindr=False
 ) -> Tuple[List[np.ndarray], np.ndarray]: 
@@ -416,8 +535,9 @@ def ensemble_models(
     """
 
     predictions = []
-    model_paths = sorted(model_paths) # ensure consistency of 
-    for path in model_paths: # for each model
+    # model_paths = sorted(model_paths) # ensure consistency of 
+    print(len(image_tower_types), len(use_huggingface_berts), len(huggingface_bert_keys))
+    for path, image_tower_type, use_huggingface_bert, huggingface_bert_key in zip(model_paths, image_tower_types, use_huggingface_berts, huggingface_bert_keys): # for each model
         model_name = Path(path).stem
 
         # load in model and `torch.DataLoader`
